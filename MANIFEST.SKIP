@@ -1,0 +1,15 @@
+%$
+\.(b[ac]k|old|o)$
+\bMakefile$
+\bother\b
+\blog$
+\bscreen
+\bConfig\b
+\bblib\b
+\bpty-4.0\b
+\bTty\.c$
+AutoConf\..*
+\.bso?$
+\.nfs[A-Z0-9]+$
+a\.out$
+\bpm_to_blib$
