@@ -1,3 +1,9 @@
+2002-01-18   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.pm: v0.94_02
+
+	* Tty.xs: added #include termio.h
+
 2002-01-07   Roland Giersig  <rgiersig@cpan.org>
 
 	* Pty.pm: adapted to new interface

@@ -129,7 +129,7 @@ ESQ
 
 # find various headerfiles
 
-@headers = qw(libutil.h util.h pty.h sys/stropts.h);
+@headers = qw(libutil.h util.h pty.h sys/stropts.h termio.h);
 
 foreach my $h (@headers) {
   open(TST,">headtest.c") or die "open: $!";

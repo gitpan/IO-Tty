@@ -111,6 +111,10 @@ newCONSTSUB(stash,name,sv)
 # include <sys/stropts.h>
 #endif
 
+#ifdef HAVE_TERMIO_H
+#include <termio.h>
+#endif
+
 #ifndef O_NOCTTY
 #define O_NOCTTY 0
 #endif
