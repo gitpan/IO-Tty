@@ -2,6 +2,15 @@ use ExtUtils::MakeMaker;
 
 use Config;
 
+#
+# Grab things that perl's Configure has already discovered
+#
+#AutoConf::Define(sigret_t => $Config{'signal_t'});
+#AutoConf::Define(SIGPROTOARG => '()');
+#
+# Now some poking around in /dev to see what we can find
+#
+
 my @define;
 
 push(@define, '-DHAVE_DEV_PTC')
@@ -25,8 +34,11 @@ if (@ptys)
   push(@define, '-DPTYTEMPLATE=\\"' . "$pdir/ptyXY" . '\\"');
  }
 
-system('Configure') unless -f "config.h"; 
-system($^X,'-pi','-e','s/_config_h_/_TTYconfig_h_/','config.h');
+system('./Configure') && die "Configure: $!"
+	unless -f "TTYcfg.h"; 
+
+die "Configure did not complete, please run manually"
+	unless -f "TTYcfg.h"; 
 
 WriteMakefile(
     'NAME'	    => 'IO::Tty',

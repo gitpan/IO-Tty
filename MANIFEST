@@ -7,5 +7,4 @@ Tty.pm
 Tty.xs
 try
 Configure                    Portability tool
-config_h.SH                  Produces config.h
-README
+TTYcfg_h.SH                  Produces TTYcfg.h

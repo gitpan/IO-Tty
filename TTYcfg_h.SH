@@ -14,31 +14,28 @@ esac
 case "$0" in
 */*) cd `expr X$0 : 'X\(.*\)/'` ;;
 esac
-echo "Extracting config.h (with variable substitutions)"
-sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-def!#undef!'
+echo "Extracting TTYcfg.h (with variable substitutions)"
+sed <<!GROK!THIS! >TTYcfg.h -e 's!^#undef!/\*#define!' -e 's!^#un-def!#undef!'
 /*
- * This file was produced by running the config_h.SH script, which
+ * This file was produced by running the TTYcfg_h.SH script, which
  * gets its values from config.sh, which is generally produced by
  * running Configure.
  *
  * Feel free to modify any of this as the need arises.  Note, however,
- * that running config_h.SH again will wipe out any changes you've made.
- * For a more permanent change edit config.sh and rerun config_h.SH.
+ * that running TTYcfg_h.SH again will wipe out any changes you've made.
+ * For a more permanent change edit config.sh and rerun TTYcfg_h.SH.
  *
- * \$Id: Config_h.U,v 3.0.1.5 1997/02/28 14:57:43 ram Exp $
+ * \$Id: Config_h.U,v 3.0.1.4 1995/09/25 09:10:49 ram Exp $
  */
 
-/*
- * Package name      : $package
- * Source directory  : $src
- * Configuration time: $cf_time
- * Configured by     : $cf_by
- * Target system     : $myuname
+/* Configuration time: $cf_time
+ * Configured by: $cf_by
+ * Target system: $myuname
  */
 
-#ifndef _TTYconfig_h_
-#un-def _TTYconfig_h_
-#define _TTYconfig_h_
+#ifndef _TTYcfg_h_
+#un-def _TTYcfg_h_
+#define _TTYcfg_h_
 
 /* HAS_STRERROR:
  *	This symbol, if defined, indicates that the strerror routine is
@@ -112,7 +109,7 @@ sed <<!GROK!THIS! >config.h -e 's!^#undef\(.*/\)\*!/\*#define\1 \*!' -e 's!^#un-
  *
  *	The package designer should define VOIDUSED to indicate the requirements
  *	of the package.  This can be done either by #defining VOIDUSED before
- *	including config.h, or by defining defvoidused in Myinit.U.  If the
+ *	including TTYcfg.h, or by defining defvoidused in Myinit.U.  If the
  *	latter approach is taken, only those flags will be tested.  If the
  *	level of void support necessary is not present, defines void to int.
  */

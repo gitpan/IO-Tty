@@ -13,7 +13,7 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION);
 
-$VERSION = "0.01";
+$VERSION = "0.02";
 @ISA = qw(IO::Handle DynaLoader);
 
 bootstrap IO::Tty;

@@ -18,7 +18,7 @@ typedef FILE * InOutStream;
 	    RETVAL = r; \
 	} while(0)
 
-#include "config.h"
+#include "TTYcfg.h"
 
 /* Copyright (c) 1993
  *      Juergen Weigert (jnweiger@immd4.informatik.uni-erlangen.de)
