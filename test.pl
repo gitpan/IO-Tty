@@ -35,9 +35,8 @@ plan tests => 3;
 # now for the echoback tests
 print <<_EOT_;
 Checking basic functionality and how your ptys handle large strings...
-  This test may hang on certain systems (Cygwin, for example), even
-  though it is protected by alarm().  If the counter stops, try Ctrl-C,
-  the test should continue then.
+  This test may hang on certain systems, even though it is protected
+  by alarm().  If the counter stops, try Ctrl-C, the test should continue.
 
 _EOT_
 

@@ -1,3 +1,9 @@
+2002-01-31   Roland Giersig  <rgiersig@cpan.org>
+
+	* Pty.pm: add IO::Stty to @ISA, master pty is sometimes a tty.
+
+	* Tty.pm: v0.95_01
+
 2002-01-30   Roland Giersig  <rgiersig@cpan.org>
 
 	* Tty.pm, Pty.pm: v0.94_05

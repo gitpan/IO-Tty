@@ -13,6 +13,8 @@ use vars qw(@ISA $VERSION);
 $VERSION = $IO::Tty::VERSION;
 
 @ISA = qw(IO::Handle);
+eval { require IO::Stty };
+push @ISA, "IO::Stty" if (not $@);  # if IO::Stty is installed
 
 sub new {
   my ($class) = $_[0] || "IO::Pty";
@@ -142,7 +144,7 @@ IO::Pty - Pseudo TTY object class
 
 =head1 VERSION
 
-0.94_05 BETA
+0.95_01 BETA
 
 =head1 SYNOPSIS
 

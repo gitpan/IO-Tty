@@ -194,21 +194,22 @@ my @ttsyms_to_check = qw(TIOCGETC TIOCGETP TIOCGLTC
 
 # check if problematic symbols can be compiled
 foreach my $s (sort @ttsyms_to_check) {
-  open(TST,">ttsymtest.c") or die "open: $!";
+  open(TST,">ttsymtest_$s.c") or die "open: $!";
   print TST <<"ESQ";
 #include <sys/types.h>
-#ifdef HAVE_TERMIO_H
-#include <termio.h>
-#endif
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
 #endif
+#ifdef HAVE_TERMIO_H
+#include <termio.h>
+#endif
+
 int main () { int x; x = $s; return 0; }
 ESQ
 
   close(TST);
   print "Checking $s... ";
-  if (system("$Config{'cc'} $Config{'cppflags'} @{[keys %define]} ttsymtest.c >/dev/null 2>&1")) {
+  if (system("$Config{'cc'} $Config{'cppflags'} @{[keys %define]} ttsymtest_$s.c >ttsymtest_$s.log 2>&1")) {
     print "has compile problems, not available.\n";
   }
   else {
@@ -239,7 +240,7 @@ foreach my $check
   (
    {
     defines => [qw"-DHAVE_PTSNAME -DHAVE_PTSNAME_R"],
-    msg => "UH OH! Neither ptsname() nor ptsname_r() could be found, expect problems.\n",
+    msg => "UH OH! Neither ptsname() nor ptsname_r() could be found,\n there may be problems lateron.\n",
    },
    {
     defines => [qw"-DHAVE_DEV_PTMX -DHAVE_DEV_PTYM_CLONE -DHAVE_DEV_PTC -DHAVE_DEV_PTMX_BSD -DHAVE__GETPTY -DHAVE_OPENPTY -DHAVE_GETPT"],

@@ -12,7 +12,7 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = $XS_VERSION = "0.94_05";
+$VERSION = $XS_VERSION = "0.95_01";
 @ISA = qw(IO::Handle);
 
 eval { require IO::Stty };
@@ -97,7 +97,7 @@ IO::Tty - Low-level allocate a pseudo-Tty
 
 =head1 VERSION
 
-0.94_05 BETA
+0.95_01 BETA
 
 =head1 SYNOPSIS
 
