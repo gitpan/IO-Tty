@@ -7,12 +7,16 @@ package IO::Tty;
 
 use IO::Handle;
 use IO::File;
+use IO::Tty::Constant;
+use Carp;
 
+require POSIX;
 require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = $XS_VERSION = "0.95_01";
+$VERSION = 0.97_01;
+$XS_VERSION = "0.97_01";
 @ISA = qw(IO::Handle);
 
 eval { require IO::Stty };
@@ -47,45 +51,45 @@ sub open {
     1;
 }
 
-package IO::Tty::Constant;
+sub clone_winsize_from {
+  my ($self, $fh) = @_;
+  my $winsize = "";
+  croak "Given filehandle is not a tty in clone_winsize_from, called"
+    if not POSIX::isatty($fh);  
+  return 1 if not POSIX::isatty($self);  # ignored for master ptys
+  ioctl($fh, &IO::Tty::Constant::TIOCGWINSZ, $winsize)
+    and ioctl($self, &IO::Tty::Constant::TIOCSWINSZ, $winsize)
+      and return 1;
+  warn "clone_winsize_from: error: $!" if $^W;
+  return undef;
+}
 
-use vars qw(@ISA @EXPORT_OK);
-require Exporter;
+sub set_raw($) {
+  require POSIX;
+  my $self = shift;
+  return 1 if not POSIX::isatty($self);
+  my $ttyno = fileno($self);
+  my $termios = new POSIX::Termios;
+  unless ($termios) {
+    warn "set_raw: new POSIX::Termios failed: $!";
+    return undef;
+  }
+  unless ($termios->getattr($ttyno)) {
+    warn "set_raw: getattr($ttyno) failed: $!";
+    return undef;
+  }
+  $termios->setiflag(0);
+  $termios->setoflag(0);
+  $termios->setlflag(0);
+  $termios->setcc(&POSIX::VMIN, 1);
+  $termios->setcc(&POSIX::VTIME, 0);
+  unless ($termios->setattr($ttyno, &POSIX::TCSANOW)) {
+    warn "set_raw: setattr($ttyno) failed: $!";
+    return undef;
+  }
+  return 1;
+}
 
-@ISA = qw(Exporter);
-@EXPORT_OK = qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200
-	B200 B230400 B2400 B300 B307200 B38400 B460800 B4800 B50
-	B57600 B600 B75 B76800 B9600 BRKINT BS0 BS1 BSDLY CBAUD
-	CBAUDEXT CBRK CCTS_OFLOW CDEL CDSUSP CEOF CEOL CEOL2 CEOT
-	CERASE CESC CFLUSH CIBAUD CIBAUDEXT CINTR CKILL CLNEXT CLOCAL
-	CNSWTCH CNUL CQUIT CR0 CR1 CR2 CR3 CRDLY CREAD CRPRNT CRTSCTS
-	CRTSXOFF CRTS_IFLOW CS5 CS6 CS7 CS8 CSIZE CSTART CSTOP CSTOPB
-	CSUSP CSWTCH CWERASE DEFECHO DIOC DIOCGETP DIOCSETP DOSMODE
-	ECHO ECHOCTL ECHOE ECHOK ECHOKE ECHONL ECHOPRT EXTA EXTB FF0
-	FF1 FFDLY FIORDCHK FLUSHO HUPCL ICANON ICRNL IEXTEN IGNBRK
-	IGNCR IGNPAR IMAXBEL INLCR INPCK ISIG ISTRIP IUCLC IXANY IXOFF
-	IXON KBENABLED LDCHG LDCLOSE LDDMAP LDEMAP LDGETT LDGMAP LDIOC
-	LDNMAP LDOPEN LDSETT LDSMAP LOBLK NCCS NL0 NL1 NLDLY NOFLSH
-	OCRNL OFDEL OFILL OLCUC ONLCR ONLRET ONOCR OPOST PAGEOUT
-	PARENB PAREXT PARMRK PARODD PENDIN RCV1EN RTS_TOG TAB0 TAB1
-	TAB2 TAB3 TABDLY TCDSET TCFLSH TCGETA TCGETS TCIFLUSH TCIOFF
-	TCIOFLUSH TCION TCOFLUSH TCOOFF TCOON TCSADRAIN TCSAFLUSH
-	TCSANOW TCSBRK TCSETA TCSETAF TCSETAW TCSETCTTY TCSETS TCSETSF TCSETSW
-	TCXONC TERM_D40 TERM_D42 TERM_H45 TERM_NONE TERM_TEC TERM_TEX
-	TERM_V10 TERM_V61 TIOCCBRK TIOCCDTR TIOCEXCL TIOCCONS
-	TIOCFLUSH TIOCGETC TIOCGETD TIOCGETP TIOCGLTC TIOCGPGRP
-	TIOCGSID TIOCGSOFTCAR TIOCGWINSZ TIOCHPCL TIOCKBOF TIOCKBON
-	TIOCLBIC TIOCLBIS TIOCLGET TIOCLSET TIOCMBIC TIOCMBIS TIOCMGET
-	TIOCMSET TIOCM_CAR TIOCM_CD TIOCM_CTS TIOCM_DSR TIOCM_DTR
-	TIOCM_LE TIOCM_RI TIOCM_RNG TIOCM_RTS TIOCM_SR TIOCM_ST
-	TIOCNOTTY TIOCNXCL TIOCOUTQ TIOCREMOTE TIOCSBRK TIOCSDTR
-	TIOCSETC TIOCSETD TIOCSETN TIOCSCTTY TIOCSETP TIOCSIGNAL
-	TIOCSLTC TIOCSPGRP TIOCSSID TIOCSSOFTCAR TIOCSTART TIOCSTI
-	TIOCSTOP TIOCSWINSZ TM_ANL TM_CECHO TM_CINVIS TM_LCF TM_NONE
-	TM_SET TM_SNL TOSTOP VCEOF VCEOL VDISCARD VDSUSP VEOF VEOL
-	VEOL2 VERASE VINTR VKILL VLNEXT VMIN VQUIT VREPRINT VSTART
-	VSTOP VSUSP VSWTCH VT0 VT1 VTDLY VTIME VWERASE WRAP XCASE
-	XCLUDE XMT1EN XTABS );
 
 1;
 
@@ -93,37 +97,39 @@ __END__
 
 =head1 NAME
 
-IO::Tty - Low-level allocate a pseudo-Tty
+IO::Tty - Low-level allocate a pseudo-Tty, import constants.
 
 =head1 VERSION
 
-0.95_01 BETA
+0.97_01 BETA
 
 =head1 SYNOPSIS
 
-    use IO::Tty;
+    use IO::Tty qw(TIOCNOTTY);
     ...
-    # don't use, see IO::Pty for a better way to create ptys.
+    # use only to import constants, see IO::Pty to create ptys.
 
 =head1 DESCRIPTION
 
 C<IO::Tty> is used internally by C<IO::Pty> to create a pseudo-tty.
-You wouldn't want to use it directly, use C<IO::Pty>.
+You wouldn't want to use it directly except to import constants, use
+C<IO::Pty>.  For a list of importable constants, see
+L<IO::Tty::Constant>.
 
 Windows is now supported (under the Cygwin environment, see
-http://source.redhat.com/cygwin).
+http://sources.redhat.com/cygwin/).
 
 Please note that pty creation is very system-dependend.  From my
 experience, any modern POSIX system should be fine.  Find below a
-list of systems that IO::Tty should work on.
+list of systems that C<IO::Tty> should work on.
 
 If you have problems on your system and your system is listed in the
 "verified" list, you probably have some non-standard setup, e.g. you
 compiled your Linux-kernel yourself and disabled ptys (bummer!).
 Please ask your friendly sysadmin for help.
 
-If your system is not listed, unpack the latest version of IO::Tty, do
-a C<'perl Makefile.PL; make; make test; uname -a'> and send me
+If your system is not listed, unpack the latest version of C<IO::Tty>,
+do a C<'perl Makefile.PL; make; make test; uname -a'> and send me
 (F<RGiersig@cpan.org>) the results and I'll see what I can deduce from
 that.
 
@@ -134,8 +140,8 @@ start) so I can get an overview.  Thanks!
 
 =head1 VERIFIED SYSTEMS, KNOWN ISSUES
 
-This is a list of systems that IO::Tty seems to work on ('make test'
-passes) with comments about "features":
+This is a list of systems that C<IO::Tty> seems to work on ('make
+test' passes) with comments about "features":
 
 =over 4
 
@@ -149,9 +155,21 @@ Returns EIO instead of EOF when the slave is closed.  Benign.
 
 =item * FreeBSD 4.4
 
-=item * Solaris 8
+EOF on the slave tty is not reported back to the master.
+
+=item * Solaris 8, 2.7, 2.6
 
 Has the "feature" of returning EOF just once?!
+
+EOF on the slave tty is not reported back to the master.
+
+=item * Windows NT/2k (under Cygwin)
+
+When you send (print) a too long line (>160 chars) to a non-raw pty,
+the call just hangs forever and even alarm() cannot get you out.
+Don't complain to me...
+
+EOF on the slave tty is not reported back to the master.
 
 =back
 
@@ -169,18 +187,9 @@ Tcl/Expect, see http://expect.nist.gov/FAQ.html
 
 =item * HPUX 10.20 & 11.00
 
-There seems to be no way to send an EOF from the slave to the master,
-so a parent process might not notice that the child went away.
+EOF on the slave tty is not reported back to the master.
 
 =item * OSF 4.0
-
-=item * Solaris 2.6
-
-=item * Windows NT/2k (under Cygwin)
-
-When you send (print) a too long line (>255 chars ?) to a pty, the
-call may just hang forever and even alarm() cannot get you out.  Don't
-complain to me...
 
 =back
 
@@ -190,7 +199,7 @@ E<lt>F<RGiersig@cpan.org>E<gt>.
 
 =head1 SEE ALSO
 
-L<IO::Pty>, L<Expect>
+L<IO::Pty>, L<IO::Tty::Constant>, L<Expect>
 
 =head1 MAILING LISTS
 
@@ -242,5 +251,15 @@ ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR
 TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
 USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH
 DAMAGE.
+
+In other words: Use at your own risk.  Provided as is.  Your mileage
+may vary.  Read the source, Luke!
+
+And finally, just to be sure:
+
+Any Use of This Product, in Any Manner Whatsoever, Will Increase the
+Amount of Disorder in the Universe. Although No Liability Is Implied
+Herein, the Consumer Is Warned That This Process Will Ultimately Lead
+to the Heat Death of the Universe.
 
 =cut

@@ -251,6 +251,25 @@ strlcpy(dst, src, siz)
 
 #endif /* !HAVE_STRLCPY */
 
+/*
+ * Move file descriptor so it doesn't collide with stdin/out/err
+ */
+
+static void
+make_safe_fd(int * fd)
+{
+  if (*fd < 3) {
+    int newfd;
+    newfd = fcntl(*fd, F_DUPFD, 3);
+    if (newfd < 0) {
+      if (PL_dowarn)
+	warn("IO::Tty::pty_allocate(nonfatal): tried to move fd %d up but fcntl() said %.100s", *fd, strerror(errno));
+    } else {
+      close (*fd);
+      *fd = newfd;
+    }
+  }
+}
 
 /*
  * After having acquired a master pty, try to find out the slave name,
@@ -323,7 +342,10 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #endif
 	name = ptsname(*ptyfd);
 	if (name) {
-	    strlcpy(namebuf, name, namebuflen);
+	    if(strlcpy(namebuf, name, namebuflen) >= namebuflen) {
+	      warn("ERROR: IO::Tty::open_slave: ttyname truncated");
+	      return 0;
+	    }
 	} else {
 	    if (PL_dowarn)
 		warn("IO::Tty::open_slave(nonfatal): ptsname(): %.100s", strerror(errno));
@@ -396,6 +418,16 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	      ;
 #endif /* I_PUSH */
 
+    /* finally we make sure the filedescriptors are > 2 to avoid
+       problems with stdin/out/err.  This can happen if the user
+       closes one of them before allocating a pty and leads to nasty
+       side-effects, so we take a proactive stance here.  Normally I
+       would say "Those who mess with stdin/out/err shall bear the
+       consequences to the fullest" but hey, I'm a nice guy... ;O) */
+
+    make_safe_fd(ptyfd);
+    make_safe_fd(ttyfd);
+
     return 1;
 }
 
@@ -437,7 +469,10 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    mysignal(SIGCHLD, old_signal);
 
 	    if (slave != NULL) {
-	        strlcpy(namebuf, slave, namebuflen);
+	        if (strlcpy(namebuf, slave, namebuflen) >= namebuflen) {
+		  warn("ERROR: pty_allocate: ttyname truncated");
+		  return 0;
+		}
 		if (open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 		    break;
 		close(ptyfd);
@@ -450,6 +485,9 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	}
 #endif
 
+#if defined(HAVE_PTSNAME) || defined(HAVE_PTSNAME_R)
+/* we don't need to try these if we don't have a way to get the pty names */
+
 #if defined(HAVE_GETPT)
 	/* glibc defines this */
 #if PTY_DEBUG
@@ -461,10 +499,13 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    break;		/* got one */
 	if (PL_dowarn)
 	    warn("pty_allocate(nonfatal): getpt(): %.100s", strerror(errno));
-#endif
+#endif /* defined(HAVE_GETPT) */
 
 #if defined(HAVE_OPENPTY)
-	/* openpty(3) exists in a variety of OS'es */
+	/* openpty(3) exists in a variety of OS'es, but due to it's
+	 * broken interface (no maxlen to slavename) we'll only use it
+	 * to create the tty/pty pair and rely on ptsname to get the
+	 * name.  */
 	{
 	    mysig_t old_signal;
 	    int ret;
@@ -485,7 +526,7 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    if (PL_dowarn)
 		warn("pty_allocate(nonfatal): openpty(): %.100s", strerror(errno));
 	}
-#endif
+#endif /* defined(HAVE_OPENPTY) */
 
 	/*
 	 * now try various cloning devices
@@ -543,11 +584,11 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    warn("pty_allocate(nonfatal): open(/dev/ptmx_bsd): %.100s", strerror(errno));
 #endif /* HAVE_DEV_PTMX_BSD */ 
 
-	/* try high-level stuff */
+#endif /* !defined(HAVE_PTSNAME) && !defined(HAVE_PTSNAME_R) */
 
 	/*
 	 * we still don't have a pty, so try some oldfashioned stuff, 
-	 * looking for a pty ourself.
+	 * looking for a pty/tty pair ourself.
 	 */
 
 #if defined(_CRAY)
@@ -568,11 +609,15 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	      fprintf(stderr, "trying CRAY /dev/pty/???...\n");
 #endif
 	    for (i = 0; i < highpty; i++) {
-		snprintf(buf, sizeof(buf), "/dev/pty/%03d", i);
+		sprintf(buf, "/dev/pty/%03d", i);
 		*ptyfd = open(buf, O_RDWR | O_NOCTTY);
 		if (*ptyfd < 0)
 		    continue;
-		snprintf(namebuf, namebuflen, "/dev/ttyp%03d", i);
+		sprintf(buf, "/dev/ttyp%03d", i);
+		if (strlcpy(namebuf, buf, namebuflen) >= namebuflen) {
+		  warn("ERROR: pty_allocate: ttyname truncated");
+		  return 0;
+		}
 		break;
 	    }
 	    if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
@@ -584,6 +629,7 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	{
 	    /* HPUX */
 	    char buf[64];
+	    char tbuf[64];
 	    int i;
 	    struct stat sb;
 	    const char *ptymajors = "abcefghijklmnopqrstuvwxyz";
@@ -597,12 +643,16 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #endif
 	    /* try /dev/ptym/pty[a-ce-z][0-9a-f] */
 	    for (i = 0; i < num_ptys; i++) {
-		snprintf(buf, sizeof buf, "/dev/ptym/pty%c%c",
+		sprintf(buf, "/dev/ptym/pty%c%c",
 			 ptymajors[i / num_minors],
 			 ptyminors[i % num_minors]);
-		snprintf(namebuf, namebuflen, "/dev/pty/tty%c%c",
+		sprintf(tbuf, "/dev/pty/tty%c%c",
 			 ptymajors[i / num_minors],
 			 ptyminors[i % num_minors]);
+		if (strlcpy(namebuf, tbuf, namebuflen) >= namebuflen) {
+		  warn("ERROR: pty_allocate: ttyname truncated");
+		  return 0;
+		}
 		if(stat(buf, &sb))
 		    break;	/* file does not exist, skip rest */
 		*ptyfd = open(buf, O_RDWR | O_NOCTTY);
@@ -621,11 +671,15 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    num_minors = 100;
 	    num_ptys = strlen(ptymajors) * num_minors;
 	    for (i = 0; i < num_ptys; i++) {
-		snprintf(buf, sizeof buf, "/dev/ptym/pty%c%02d",
+		sprintf(buf, "/dev/ptym/pty%c%02d",
 			 ptymajors[i / num_minors],
 			 i % num_minors);
-		snprintf(namebuf, namebuflen, "/dev/pty/tty%c%02d",
+		sprintf(tbuf, "/dev/pty/tty%c%02d",
 			 ptymajors[i / num_minors], i % num_minors);
+		if (strlcpy(namebuf, tbuf, namebuflen) >= namebuflen) {
+		  warn("ERROR: pty_allocate: ttyname truncated");
+		  return 0;
+		}
 		
 		if(stat(buf, &sb))
 		    break;	/* file does not exist, skip rest */
@@ -642,6 +696,7 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	{
 	    /* BSD-style pty code. */
 	    char buf[64];
+	    char tbuf[64];
 	    int i;
 	    const char *ptymajors = "pqrstuvwxyzabcdefghijklmnoABCDEFGHIJKLMNOPQRSTUVWXYZ";
 	    const char *ptyminors = "0123456789abcdef";
@@ -653,18 +708,26 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	      fprintf(stderr, "trying BSD /dev/pty??...\n");
 #endif
 	    for (i = 0; i < num_ptys; i++) {
-		snprintf(buf, sizeof buf, "/dev/pty%c%c",
-			 ptymajors[i / num_minors],
-			 ptyminors[i % num_minors]);
-		snprintf(namebuf, namebuflen, "/dev/tty%c%c",
-			 ptymajors[i / num_minors],
-			 ptyminors[i % num_minors]);
+		sprintf(buf, "/dev/pty%c%c",
+			ptymajors[i / num_minors],
+			ptyminors[i % num_minors]);
+		sprintf(tbuf, "/dev/tty%c%c",
+			ptymajors[i / num_minors],
+			ptyminors[i % num_minors]);
+		if (strlcpy(namebuf, tbuf, namebuflen) >= namebuflen) {
+		  warn("ERROR: pty_allocate: ttyname truncated");
+		  return 0;
+		}
 		*ptyfd = open(buf, O_RDWR | O_NOCTTY);
 		if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 		    break;
 		/* Try SCO style naming */
-		snprintf(buf, sizeof buf, "/dev/ptyp%d", i);
-		snprintf(namebuf, namebuflen, "/dev/ttyp%d", i);
+		sprintf(buf, "/dev/ptyp%d", i);
+		sprintf(tbuf, "/dev/ttyp%d", i);
+		if (strlcpy(namebuf, tbuf, namebuflen) >= namebuflen) {
+		  warn("ERROR: pty_allocate: ttyname truncated");
+		  return 0;
+		}
 		*ptyfd = open(buf, O_RDWR | O_NOCTTY);
 		if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 		    break;

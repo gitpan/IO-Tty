@@ -4,7 +4,8 @@ use IO::Pty;
 require POSIX;
 $^W = 1;
 
-$pty = new IO::Pty;
+my $pty = new IO::Pty;
+my $pid;
 
 unless (@ARGV) {
   { 
@@ -26,13 +27,15 @@ unless (@ARGV) {
   pipe(STAT_RDR, STAT_WTR)
     or die "Cannot open pipe: $!";
   STAT_WTR->autoflush(1);
-  my $pid = fork();
+  $pid = fork();
   die "Cannot fork" if not defined $pid;
   unless ($pid) {
     close STAT_RDR;
     $pty->make_slave_controlling_terminal();
     my $slave = $pty->slave();
     close $pty;
+    $slave->clone_winsize_from(\*STDIN);
+    $slave->set_raw();
 
     open(STDIN,"<&". $slave->fileno())
       or die "Couldn't reopen STDIN for reading, $!\n";
@@ -49,6 +52,7 @@ unless (@ARGV) {
   }
   close STAT_WTR;
   $pty->close_slave();
+  $pty->set_raw();
   # now wait for child exec (eof due to close-on-exit) or exec error
   my $errstatus = sysread(STAT_RDR, $errno, 256);
   die "Cannot sync with child: $!" if not defined $errstatus;
@@ -57,7 +61,15 @@ unless (@ARGV) {
     $! = $errno+0;
     die "Cannot exec(@ARGV): $!";
   }
+  $SIG{WINCH} = \&winch;
   parent($pty);
+}
+
+sub winch {
+  $pty->slave->clone_winsize_from(\*STDIN);
+  kill WINCH => $pid if $pid;
+  print "STDIN terminal size changed.\n";
+  $SIG{WINCH} = \&winch;
 }
 
 sub process

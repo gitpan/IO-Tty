@@ -1,44 +1,52 @@
 use ExtUtils::MakeMaker;
 
+use strict;
 use Config qw(%Config);
 use IO::File;
 $|=1; # to see output immediately
 $^W=1;
 
-#
-# Now some poking around in /dev to see what we can find
-#
-
 my %define;
 my @libs;
-my $Is_Beta = 1;
+my $Package_Version = '0.97_01';  # keep this consistent with Tty.pm
+my $Is_Beta = ($Package_Version =~ m/_/);
+
+open(SUB, ">xssubs.c") or die "open: $!";
 
 warn "WARNING: perl versions prior to 5.00503 may have problems.\n"
   if $] < 5.00503;
 
 # improve backward-compatibility
-@define{qw(-DPL_sv_undef=sv_undef -DPL_dowarn=dowarn)} = (1, 1)
+@define{qw(-DPL_sv_undef=sv_undef -DPL_dowarn=dowarn)} = (undef, undef)
   if $] < 5.004_05;
 
-print "Now let's see what we can find out about your system...\n";
+print <<_EOT_;
+Now let's see what we can find out about your system
+(logfiles of failing tests are available in the conf/ dir)...
+_EOT_
 
-@define{qw(-DHAVE_CYGWIN -DHAVE_DEV_PTMX)} = (1, 1)
+#
+# Now some poking around in /dev to see what we can find
+#
+
+@define{qw(-DHAVE_CYGWIN -DHAVE_DEV_PTMX)} = (undef, undef)
   if ($^O =~ m/cygwin/i);
 
-$define{'-DHAVE_DEV_PTMX'} = 1
+$define{'-DHAVE_DEV_PTMX'} = undef
   if (-c '/dev/ptmx');
 
-$define{'-DHAVE_DEV_PTYM_CLONE'} = 1
+$define{'-DHAVE_DEV_PTYM_CLONE'} = undef
   if (-c '/dev/ptym/clone');
 
-$define{'-DHAVE_DEV_PTC'} = 1
+$define{'-DHAVE_DEV_PTC'} = undef
   if (-c "/dev/ptc");
 
-$define{'-DHAVE_DEV_PTMX_BSD'} = 1
+$define{'-DHAVE_DEV_PTMX_BSD'} = undef
   if (-c "/dev/ptmx_bsd");
 
-$define{'-DHAVE_DEV_PTYM'} = 1
+$define{'-DHAVE_DEV_PTYM'} = undef
   if (-d "/dev/ptym" and -d "/dev/pty");
+
 
 # config tests go to a separate dir
 unless( mkdir 'conf', 0777 ) {
@@ -56,14 +64,15 @@ int main () { return 0; }
 ESQ
 close(TST);
 
-if (system("$Config{'cc'} $Config{'cppflags'} compilerok.c")) {
+if (system("$Config{'cc'} $Config{'cppflags'} compilerok.c > compilerok.log 2>&1")) {
   die <<"EDQ";
 
 ERROR: cannot run the configured compiler $Config{'cc'}
-Maybe you should build perl by yourself?
+(see conf/compilerok.log).  Maybe you should build perl by yourself?
 
 EDQ
 }
+unlink "compilerok.c", "compilerok.log";
 
 # checking for various functions
 
@@ -80,7 +89,7 @@ my %funcs = (ttyname   => "",
 	    );
 
 foreach my $f (sort keys %funcs) {
-  open(TST,">conftest.c") or die "open: $!";
+  open(TST,">functest_$f.c") or die "open: $!";
   print TST <<"ESQ";
 /* System header to define __stub macros and hopefully few prototypes,
     which can conflict with char \$ac_func (); below.  */
@@ -118,129 +127,160 @@ f = $f;
 ESQ
 
   close(TST);
-  print "Looking for $f()... ";
-  if (system("$Config{'cc'} $Config{'cppflags'} $funcs{$f} conftest.c >/dev/null 2>&1")) {
+  print "Looking for $f()" . "." x (13-length($f)) . " ";
+  if (system("$Config{'cc'} $Config{'cppflags'} $funcs{$f} functest_$f.c > functest_$f.log 2>&1")) {
     print "not found.\n";
   } else {
-    $define{"-DHAVE_\U$f"} = 1;
+    $define{"-DHAVE_\U$f"} = undef;
     push @libs, $funcs{$f} if $funcs{$f};
     print "FOUND.\n";
+    unlink "functest_$f.c", "functest_$f.log" ;
   }
 }
 
 # find various headerfiles
 
-@headers = qw(libutil.h util.h pty.h sys/stropts.h termio.h termios.h);
+my @headers = qw(libutil.h util.h pty.h sys/stropts.h termio.h termios.h);
 
 foreach my $h (sort @headers) {
-  open(TST,">headtest.c") or die "open: $!";
+  my $def = $h;
+  $def =~ s/\W/_/g;
+  open(TST,">headtest_$def.c") or die "open: $!";
   print TST <<"ESQ";
 #include <sys/types.h>
 #include <$h>
 int main () { return 0; }
 ESQ
   close(TST);
-  print "Looking for $h... ";
-  if(system("$Config{'cc'} $Config{'cppflags'} headtest.c > /dev/null 2>&1")) {
+  print "Looking for $h" . "." x (15-length($h)) . " ";
+  if(system("$Config{'cc'} $Config{'cppflags'} headtest_$def.c > headtest_$def.log 2>&1")) {
     print "not found.\n"
   }
   else {
-    $h =~ s/\W/_/g;
-    $define{"-DHAVE_\U$h"} = 1;
+    $define{"-DHAVE_\U$def"} = $h;
     print "FOUND.\n";
+    unlink "headtest_$def.c", "headtest_$def.log";
   }
 }
 
-my @ttsyms = qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
-	    B230400 B2400 B300 B307200 B38400 B460800 B4800 B50 B57600
-	    B600 B75 B76800 B9600 BRKINT BS0 BS1 BSDLY CBAUD CBAUDEXT
-	    CBRK CCTS_OFLOW CDEL CDSUSP CEOF CEOL CEOL2 CEOT CERASE
-	    CESC CFLUSH CIBAUD CIBAUDEXT CINTR CKILL CLNEXT CLOCAL
-	    CNSWTCH CNUL CQUIT CR0 CR1 CR2 CR3 CRDLY CREAD CRPRNT
-	    CRTSCTS CRTSXOFF CRTS_IFLOW CS5 CS6 CS7 CS8 CSIZE CSTART
-	    CSTOP CSTOPB CSUSP CSWTCH CWERASE DEFECHO DIOC DIOCGETP
-	    DIOCSETP DOSMODE ECHO ECHOCTL ECHOE ECHOK ECHOKE ECHONL
-	    ECHOPRT EXTA EXTB FF0 FF1 FFDLY FIORDCHK FLUSHO HUPCL
-	    ICANON ICRNL IEXTEN IGNBRK IGNCR IGNPAR IMAXBEL INLCR
-	    INPCK ISIG ISTRIP IUCLC IXANY IXOFF IXON KBENABLED LDCHG
-	    LDCLOSE LDDMAP LDEMAP LDGETT LDGMAP LDIOC LDNMAP LDOPEN
-	    LDSETT LDSMAP LOBLK NCCS NL0 NL1 NLDLY NOFLSH OCRNL OFDEL
-	    OFILL OLCUC ONLCR ONLRET ONOCR OPOST PAGEOUT PARENB PAREXT
-	    PARMRK PARODD PENDIN RCV1EN RTS_TOG TAB0 TAB1 TAB2 TAB3
-	    TABDLY TCDSET TCFLSH TCGETA TCGETS TCIFLUSH TCIOFF
+# now write xssubs
+
+print SUB qq{sv_setpv(config, "@{[sort keys %define]}");\n};
+
+my @ttsyms = qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200
+	    B200 B230400 B2400 B300 B307200 B38400 B460800 B4800 B50
+	    B57600 B600 B75 B76800 B9600 BRKINT BS0 BS1 BSDLY CBAUD
+	    CBAUDEXT CBRK CCTS_OFLOW CDEL CDSUSP CEOF CEOL CEOL2 CEOT
+	    CERASE CESC CFLUSH CIBAUD CIBAUDEXT CINTR CKILL CLNEXT
+	    CLOCAL CNSWTCH CNUL CQUIT CR0 CR1 CR2 CR3 CRDLY CREAD
+	    CRPRNT CRTSCTS CRTSXOFF CRTS_IFLOW CS5 CS6 CS7 CS8 CSIZE
+	    CSTART CSTOP CSTOPB CSUSP CSWTCH CWERASE DEFECHO DIOC
+	    DIOCGETP DIOCSETP DOSMODE ECHO ECHOCTL ECHOE ECHOK ECHOKE
+	    ECHONL ECHOPRT EXTA EXTB FF0 FF1 FFDLY FIORDCHK FLUSHO
+	    HUPCL ICANON ICRNL IEXTEN IGNBRK IGNCR IGNPAR IMAXBEL
+	    INLCR INPCK ISIG ISTRIP IUCLC IXANY IXOFF IXON KBENABLED
+	    LDCHG LDCLOSE LDDMAP LDEMAP LDGETT LDGMAP LDIOC LDNMAP
+	    LDOPEN LDSETT LDSMAP LOBLK NCCS NL0 NL1 NLDLY NOFLSH OCRNL
+	    OFDEL OFILL OLCUC ONLCR ONLRET ONOCR OPOST PAGEOUT PARENB
+	    PAREXT PARMRK PARODD PENDIN RCV1EN RTS_TOG TAB0 TAB1 TAB2
+	    TAB3 TABDLY TCDSET TCFLSH TCGETA TCGETS TCIFLUSH TCIOFF
 	    TCIOFLUSH TCION TCOFLUSH TCOOFF TCOON TCSADRAIN TCSAFLUSH
-	    TCSANOW TCSBRK TCSETA TCSETAF TCSETAW TCSETCTTY TCSETS TCSETSF
-	    TCSETSW TCXONC TERM_D40 TERM_D42 TERM_H45 TERM_NONE
-	    TERM_TEC TERM_TEX TERM_V10 TERM_V61 TIOCCBRK TIOCCDTR
-	    TIOCCONS TIOCEXCL TIOCFLUSH TIOCGETD 
-	    TIOCGPGRP TIOCGSID TIOCGSOFTCAR TIOCGWINSZ
-	    TIOCHPCL TIOCKBOF TIOCKBON TIOCLBIC TIOCLBIS TIOCLGET
-	    TIOCLSET TIOCMBIC TIOCMBIS TIOCMGET TIOCMSET TIOCM_CAR
-	    TIOCM_CD TIOCM_CTS TIOCM_DSR TIOCM_DTR TIOCM_LE TIOCM_RI
-	    TIOCM_RNG TIOCM_RTS TIOCM_SR TIOCM_ST TIOCNOTTY TIOCNXCL
-	    TIOCOUTQ TIOCREMOTE TIOCSBRK TIOCSCTTY TIOCSDTR
-	    TIOCSETD TIOCSIGNAL TIOCSPGRP
-	    TIOCSSID TIOCSSOFTCAR TIOCSTART TIOCSTI TIOCSTOP
+	    TCSANOW TCSBRK TCSETA TCSETAF TCSETAW TCSETCTTY TCSETS
+	    TCSETSF TCSETSW TCXONC TERM_D40 TERM_D42 TERM_H45
+	    TERM_NONE TERM_TEC TERM_TEX TERM_V10 TERM_V61 TIOCCBRK
+	    TIOCCDTR TIOCCONS TIOCEXCL TIOCFLUSH TIOCGETD TIOCGETC
+	    TIOCGETP TIOCGLTC TIOCSETC TIOCSETN TIOCSETP TIOCSLTC
+	    TIOCGPGRP TIOCGSID TIOCGSOFTCAR TIOCGWINSZ TIOCHPCL
+	    TIOCKBOF TIOCKBON TIOCLBIC TIOCLBIS TIOCLGET TIOCLSET
+	    TIOCMBIC TIOCMBIS TIOCMGET TIOCMSET TIOCM_CAR TIOCM_CD
+	    TIOCM_CTS TIOCM_DSR TIOCM_DTR TIOCM_LE TIOCM_RI TIOCM_RNG
+	    TIOCM_RTS TIOCM_SR TIOCM_ST TIOCNOTTY TIOCNXCL TIOCOUTQ
+	    TIOCREMOTE TIOCSBRK TIOCSCTTY TIOCSDTR TIOCSETD TIOCSIGNAL
+	    TIOCSPGRP TIOCSSID TIOCSSOFTCAR TIOCSTART TIOCSTI TIOCSTOP
 	    TIOCSWINSZ TM_ANL TM_CECHO TM_CINVIS TM_LCF TM_NONE TM_SET
 	    TM_SNL TOSTOP VCEOF VCEOL VDISCARD VDSUSP VEOF VEOL VEOL2
 	    VERASE VINTR VKILL VLNEXT VMIN VQUIT VREPRINT VSTART VSTOP
 	    VSUSP VSWTCH VT0 VT1 VTDLY VTIME VWERASE WRAP XCASE XCLUDE
 	    XMT1EN XTABS);
 
-# these are symbols that have declaration problems on some systems, so
-# we check them separately
-my @ttsyms_to_check = qw(TIOCGETC TIOCGETP TIOCGLTC
-			 TIOCSETC TIOCSETN TIOCSETP TIOCSLTC );
+print "Checking what symbols are defined...\n";
 
-# check if problematic symbols can be compiled
-foreach my $s (sort @ttsyms_to_check) {
-  open(TST,">ttsymtest_$s.c") or die "open: $!";
-  print TST <<"ESQ";
+open (CPPIN, ">ttsymsdefined.in")
+  or die "open: $!";
+
+print CPPIN <<_EOT_;
+#include <unistd.h>
 #include <sys/types.h>
-#ifdef HAVE_TERMIOS_H
-#include <termios.h>
-#endif
-#ifdef HAVE_TERMIO_H
-#include <termio.h>
-#endif
+_EOT_
 
-int main () { int x; x = $s; return 0; }
-ESQ
-
-  close(TST);
-  print "Checking $s... ";
-  if (system("$Config{'cc'} $Config{'cppflags'} @{[keys %define]} ttsymtest_$s.c >ttsymtest_$s.log 2>&1")) {
-    print "has compile problems, not available.\n";
-  }
-  else {
-    push @ttsyms, $s;
-    print "OK.\n";
-  }
+foreach my $def (keys %define) {
+  print CPPIN "#include <$define{$def}>\n" if defined $define{$def};
 }
 
-chdir($dir) or die "chdir: $!";
-
-open(SUB,">xssubs.c") or die "open: $!";
-
-print SUB qq{sv_setpv(config, "@{[sort keys %define]}");\n};
-
-foreach (@ttsyms) {
-  print SUB <<"EDQ";
-#ifdef $_
-newCONSTSUB(stash, "$_", newSViv($_));
+foreach my $s (sort @ttsyms) {
+  print CPPIN <<"_EOT_";
+#ifdef $s
+EXISTS "$s"
 #else
-newCONSTSUB(stash, "$_", &PL_sv_undef);
+NOT HERE "$s"
 #endif
-EDQ
+_EOT_
 }
+close CPPIN;
+
+if(system("$Config{'cpp'} $Config{'ccflags'} @{[keys %define]} ttsymsdefined.in > ttsymsdefined.out")) {
+  die "cannot run cpp";
+}
+
+open (CPPOUT, "ttsymsdefined.out") or die "open: $!";
+my %ttsyms_exist = map {($_, undef)}
+  grep {s/^EXISTS "(\w+)".*$/$1/s} (<CPPOUT>);
+close CPPOUT;
+
+print <<_EOT_;
+Checking if defined symbols compile OK...
+(sorry for the tedious check, but some systems have not too clean
+ header files, to say the least...)
+_EOT_
+
+my %badsyms;
+
+foreach my $s (sort @ttsyms) {
+  if (exists $ttsyms_exist{$s}) {
+    open(TST,">ttsymtest_$s.c") or die "open: $!";
+    print TST "#include <sys/types.h>\n";
+    foreach my $def (keys %define) {
+      print TST "#include <$define{$def}>\n" if defined $define{$def};
+    }
+    print TST "int main () { int x; x = $s; return 0; }\n";
+    close(TST);
+
+    if (system("$Config{'cc'} $Config{'ccflags'} @{[keys %define]} ttsymtest_$s.c >ttsymtest_$s.log 2>&1")) {
+      print SUB qq{newCONSTSUB(stash, "$s", &PL_sv_undef);\n};
+      $badsyms{$s} = undef;
+    }
+    else {
+      print SUB qq{newCONSTSUB(stash, "$s", newSViv($s));\n};
+      unlink "ttsymtest_$s.c", "ttsymtest_$s.log";
+    }
+    print "$s ";
+  } else {
+    print SUB qq{newCONSTSUB(stash, "$s", &PL_sv_undef);\n};
+  }
+}
+
 close(SUB);
+print "\n\n";
+
+# now back to Makefile dir
+chdir($dir) or die "chdir: $!";
 
 my $all_ok = 1;
 foreach my $check
   (
    {
     defines => [qw"-DHAVE_PTSNAME -DHAVE_PTSNAME_R"],
-    msg => "UH OH! Neither ptsname() nor ptsname_r() could be found,\n there may be problems lateron.\n",
+    msg => "WARNING!  Neither ptsname() nor ptsname_r() could be found,\n so we cannot use a high-level interface like openpty().\n",
    },
    {
     defines => [qw"-DHAVE_DEV_PTMX -DHAVE_DEV_PTYM_CLONE -DHAVE_DEV_PTC -DHAVE_DEV_PTMX_BSD -DHAVE__GETPTY -DHAVE_OPENPTY -DHAVE_GETPT"],
@@ -257,28 +297,110 @@ foreach my $check
     }
   }
 
-print "Configuration looks good.\n" if $all_ok;
+my %used_syms = map {($_, undef)}
+  qw(TIOCSCTTY TCSETCTTY TIOCNOTTY TIOCGWINSZ TIOCSWINSZ);
+foreach my $s (sort keys %badsyms) {
+  if (exists $used_syms{$s}) {
+    print "WARNING!  $s is used by Pty.pm but didn't compile.  This may mean reduced functionality.\n";
+    $all_ok = 0;
+  } else {
+    print "Warning:  $s has compile problems, it's thus not available (but it's not used by Pty.pm, so that's OK).  See conf/ttsymtest_$s.log for details.\n";
+  }
+}
 
-print "DEFINE = @{[sort keys %define]}\n";
+print ">>> Configuration looks good! <<<\n\n" if $all_ok;
+print <<'_EOT_' if keys %badsyms;
+(If you need those missing symbols, check your header files where those
+are declared.  I'm expecting them to be found in either termio.h or
+termios.h (and their #include hierarchy), but on some systems there
+are structs required that can be found in asm/*.h or linux/*.h.  You
+can try to add these to @headers and see if that helps.  Sorry, but
+the fault really lies with your system vendor.)
+
+_EOT_
+
+print "Writing IO::Tty::Constant.pm...\n";
+unless( mkdir 'Tty', 0777 ) {
+  my $e = $!;
+  die "mkdir: $e" unless -d 'Tty';
+}
+open (POD, ">Tty/Constant.pm") or die "open: $!";
+print POD <<"_EOT_";
+
+package IO::Tty::Constant;
+
+use vars qw(\@ISA \@EXPORT_OK);
+require Exporter;
+
+\@ISA = qw(Exporter);
+\@EXPORT_OK = qw(@ttsyms);
+
+__END__
+
+=head1 NAME
+
+IO::Tty::Constant - Terminal Constants (autogenerated)
+
+=head1 SYNOPSIS
+
+ use IO::Tty::Constant qw(TIOCNOTTY);
+ ...
+
+=head1 DESCRIPTION
+
+This package defines constants usually found in <termio.h> or
+<termios.h> (and their #include hierarchy).  Find below an
+autogenerated alphabetic list of all known constants and whether they
+are defined on your system (prefixed with '+') and have compilation
+problems ('o').
+
+=head1 DEFINED CONSTANTS
+
+_EOT_
+
+foreach my $s (@ttsyms) {
+  if (exists $badsyms{$s}) {
+    print POD "=item *\n\n";
+  } elsif (exists $ttsyms_exist{$s}) {
+    print POD "=item +\n\n";
+  } else {
+    print POD "=item -\n\n";
+  }
+  print POD "$s\n\n";
+}
+
+print POD <<_EOT_;
+
+=head1 FOR MORE INFO SEE
+
+L<IO::Tty>
+
+=cut
+
+_EOT_
+
+close POD;
 
 print <<'__EOT__' if $Is_Beta;
 **********************************************************************
 WARNING: this is a BETA version.  If it works, good for you, if not,
-tell me, <RGiersig@cpan.org> about it (including full output of 
+tell me, <RGiersig@cpan.org> about it (including full output of
 'perl Makefile.PL; make; make test;') and I'll see what I can do.
 **********************************************************************
 __EOT__
 
+print "DEFINE = @{[sort keys %define]}\n";
 
 WriteMakefile(
     'NAME'	    => 'IO::Tty',
-    'VERSION_FROM'  => 'Tty.pm',
+    'VERSION'       => $Package_Version,
     'DEFINE'	    => join(" ", sort keys %define),
     'LIBS'          => join(" ", @libs),
-    'clean'	    => {'FILES' => 'xssubs.c conf'},
+    'clean'	    => {'FILES' => 'xssubs.c conf Tty.exp_old log'},
+    'realclean'	    => {'FILES' => 'Tty IO-Tty.ppd'},
     'MAP_TARGET'    => 'perltty',
     ($] >= 5.00503) ?
-    ( AUTHOR    => 'Roland Giersig <RGiersig@cpan.org>, Graham Barr <GBarr@cpan.org>',
+    ( AUTHOR    => 'Roland Giersig <RGiersig@cpan.org>',
       ABSTRACT  => 'Pseudo ttys and constants' ) :
     (),
 );

@@ -1,3 +1,16 @@
+2002-02-26   Roland Giersig  <rgiersig@cpan.org>
+
+	* test.pl: replaced Test.pm
+
+	* Tty.pm (set_raw): v0.97_01; moved set_raw() from test to method
+
+	* Tty.xs: got rid of snprintf; don't try openpty() and getpt() if
+	ptsname is not there.
+
+	* Pty.pm: v0.97_01; updated docs 
+
+	* Makefile.PL: v0.97_01; auto-create IO::Tty::Constant
+
 2002-01-31   Roland Giersig  <rgiersig@cpan.org>
 
 	* Pty.pm: add IO::Stty to @ISA, master pty is sometimes a tty.
