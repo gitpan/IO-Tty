@@ -450,6 +450,43 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	}
 #endif
 
+#if defined(HAVE_GETPT)
+	/* glibc defines this */
+#if PTY_DEBUG
+	if (print_debug)
+	  fprintf(stderr, "trying getpt()...\n");
+#endif
+	*ptyfd = getpt();
+	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
+	    break;		/* got one */
+	if (PL_dowarn)
+	    warn("pty_allocate(nonfatal): getpt(): %.100s", strerror(errno));
+#endif
+
+#if defined(HAVE_OPENPTY)
+	/* openpty(3) exists in a variety of OS'es */
+	{
+	    mysig_t old_signal;
+	    int ret;
+
+#if PTY_DEBUG
+	    if (print_debug)
+	      fprintf(stderr, "trying openpty()...\n");
+#endif
+	    old_signal = mysignal(SIGCHLD, SIG_DFL);
+	    ret = openpty(ptyfd, ttyfd, NULL, NULL, NULL);
+	    mysignal(SIGCHLD, old_signal);
+	    if (ret >= 0 && *ptyfd >= 0) {
+		if (open_slave(ptyfd, ttyfd, namebuf, namebuflen))
+		    break;
+	    }
+	    *ptyfd = -1;
+	    *ttyfd = -1;
+	    if (PL_dowarn)
+		warn("pty_allocate(nonfatal): openpty(): %.100s", strerror(errno));
+	}
+#endif
+
 	/*
 	 * now try various cloning devices
 	 */
@@ -507,45 +544,6 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #endif /* HAVE_DEV_PTMX_BSD */ 
 
 	/* try high-level stuff */
-
-#if defined(HAVE_OPENPTY)
-	/* openpty(3) exists in a variety of OS'es */
-	{
-	    mysig_t old_signal;
-	    int ret;
-	    char name[PATH_MAX+1];
-
-#if PTY_DEBUG
-	    if (print_debug)
-	      fprintf(stderr, "trying openpty()...\n");
-#endif
-	    old_signal = mysignal(SIGCHLD, SIG_DFL);
-	    ret = openpty(ptyfd, ttyfd, name, NULL, NULL);
-	    mysignal(SIGCHLD, old_signal);
-	    if (ret >= 0 && *ptyfd >= 0) {
-	        strlcpy(namebuf, name, namebuflen);
-		if (open_slave(ptyfd, ttyfd, namebuf, namebuflen))
-		    break;
-	    }
-	    *ptyfd = -1;
-	    *ttyfd = -1;
-	    if (PL_dowarn)
-		warn("pty_allocate(nonfatal): openpty(): %.100s", strerror(errno));
-	}
-#endif
-
-#if defined(HAVE_GETPT)
-	/* glibc defines this */
-#if PTY_DEBUG
-	if (print_debug)
-	  fprintf(stderr, "trying getpt()...\n");
-#endif
-	*ptyfd = getpt();
-	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
-	    break;		/* got one */
-	if (PL_dowarn)
-	    warn("pty_allocate(nonfatal): getpt(): %.100s", strerror(errno));
-#endif
 
 	/*
 	 * we still don't have a pty, so try some oldfashioned stuff, 

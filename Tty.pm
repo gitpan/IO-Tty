@@ -12,7 +12,7 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = $XS_VERSION = "0.94_03";
+$VERSION = $XS_VERSION = "0.94_05";
 @ISA = qw(IO::Handle);
 
 eval { require IO::Stty };
@@ -97,7 +97,7 @@ IO::Tty - Low-level allocate a pseudo-Tty
 
 =head1 VERSION
 
-0.94_03 BETA
+0.94_05 BETA
 
 =head1 SYNOPSIS
 
@@ -178,9 +178,9 @@ so a parent process might not notice that the child went away.
 
 =item * Windows NT/2k (under Cygwin)
 
-Seems to have buggy ptys: when you send (print) a too large string
-(some hundred bytes) to the pty, the call may just hang forever and
-even alarm() cannot get you out.  Don't complain to me...
+When you send (print) a too long line (>255 chars ?) to a pty, the
+call may just hang forever and even alarm() cannot get you out.  Don't
+complain to me...
 
 =back
 

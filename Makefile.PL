@@ -3,6 +3,7 @@ use ExtUtils::MakeMaker;
 use Config qw(%Config);
 use IO::File;
 $|=1; # to see output immediately
+$^W=1;
 
 #
 # Now some poking around in /dev to see what we can find
@@ -82,7 +83,7 @@ foreach my $f (sort keys %funcs) {
   open(TST,">conftest.c") or die "open: $!";
   print TST <<"ESQ";
 /* System header to define __stub macros and hopefully few prototypes,
-    which can conflict with char $ac_func (); below.  */
+    which can conflict with char \$ac_func (); below.  */
 #include <assert.h>
 /* Override any gcc2 internal prototype to avoid an error.  */
 #ifdef __cplusplus
@@ -123,7 +124,7 @@ ESQ
   } else {
     $define{"-DHAVE_\U$f"} = 1;
     push @libs, $funcs{$f} if $funcs{$f};
-    print "found.\n";
+    print "FOUND.\n";
   }
 }
 
@@ -146,17 +147,11 @@ ESQ
   else {
     $h =~ s/\W/_/g;
     $define{"-DHAVE_\U$h"} = 1;
-    print "found.\n";
+    print "FOUND.\n";
   }
 }
 
-chdir($dir) or die "chdir: $!";
-
-open(SUB,">xssubs.c") or die "open: $!";
-
-print SUB qq{sv_setpv(config, "@{[sort keys %define]}");\n};
-
-foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
+my @ttsyms = qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
 	    B230400 B2400 B300 B307200 B38400 B460800 B4800 B50 B57600
 	    B600 B75 B76800 B9600 BRKINT BS0 BS1 BSDLY CBAUD CBAUDEXT
 	    CBRK CCTS_OFLOW CDEL CDSUSP CEOF CEOL CEOL2 CEOT CERASE
@@ -190,10 +185,45 @@ foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
 	    TM_SNL TOSTOP VCEOF VCEOL VDISCARD VDSUSP VEOF VEOL VEOL2
 	    VERASE VINTR VKILL VLNEXT VMIN VQUIT VREPRINT VSTART VSTOP
 	    VSUSP VSWTCH VT0 VT1 VTDLY VTIME VWERASE WRAP XCASE XCLUDE
-	    XMT1EN XTABS),
-#	 qw(TIOCGETC TIOCGETP TIOCGLTC TIOCSETC TIOCSETN TIOCSETP TIOCSLTC ),
-	) {
+	    XMT1EN XTABS);
 
+# these are symbols that have declaration problems on some systems, so
+# we check them separately
+my @ttsyms_to_check = qw(TIOCGETC TIOCGETP TIOCGLTC
+			 TIOCSETC TIOCSETN TIOCSETP TIOCSLTC );
+
+# check if problematic symbols can be compiled
+foreach my $s (sort @ttsyms_to_check) {
+  open(TST,">ttsymtest.c") or die "open: $!";
+  print TST <<"ESQ";
+#include <sys/types.h>
+#ifdef HAVE_TERMIO_H
+#include <termio.h>
+#endif
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
+#endif
+int main () { int x; x = $s; return 0; }
+ESQ
+
+  close(TST);
+  print "Checking $s... ";
+  if (system("$Config{'cc'} $Config{'cppflags'} @{[keys %define]} ttsymtest.c >/dev/null 2>&1")) {
+    print "has compile problems, not available.\n";
+  }
+  else {
+    push @ttsyms, $s;
+    print "OK.\n";
+  }
+}
+
+chdir($dir) or die "chdir: $!";
+
+open(SUB,">xssubs.c") or die "open: $!";
+
+print SUB qq{sv_setpv(config, "@{[sort keys %define]}");\n};
+
+foreach (@ttsyms) {
   print SUB <<"EDQ";
 #ifdef $_
 newCONSTSUB(stash, "$_", newSViv($_));
@@ -208,21 +238,23 @@ my $all_ok = 1;
 foreach my $check
   (
    {
-    defines => qw"-DHAVE_TTYNAME -DHAVE_PTSNAME",
-    msg => "UH OH! Neither ttyname() nor ptsname() could be found, expect problems.\n",
+    defines => [qw"-DHAVE_PTSNAME -DHAVE_PTSNAME_R"],
+    msg => "UH OH! Neither ptsname() nor ptsname_r() could be found, expect problems.\n",
    },
    {
-    defines => qw"-DHAVE_DEV_PTMX -DHAVE_DEV_PTYM_CLONE -DHAVE_DEV_PTC -DHAVE_DEV_PTMX_BSD -DHAVE__GETPTY -DHAVE_OPENPTY -DHAVE_GETPT",
+    defines => [qw"-DHAVE_DEV_PTMX -DHAVE_DEV_PTYM_CLONE -DHAVE_DEV_PTC -DHAVE_DEV_PTMX_BSD -DHAVE__GETPTY -DHAVE_OPENPTY -DHAVE_GETPT"],
     msg => "No high-level lib or clone device has been found, we will use BSD-style ptys.\n",
    },
   ) {
-  foreach my $x (@define{@{$check->{defines}}}) {
-    if (not $x) {
+    my $any = 0;
+    foreach my $x (@{$check->{defines}}) {
+      $any = 1 if exists $define{$x};
+    }
+    if (not $any) {
       print $check->{msg};
       $all_ok = 0;
     }
   }
-}
 
 print "Configuration looks good.\n" if $all_ok;
 

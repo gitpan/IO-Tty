@@ -1,3 +1,13 @@
+2002-01-30   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.pm, Pty.pm: v0.94_05
+
+	* Tty.xs (allocate_pty): moved getpt() and openpty() before muxes
+
+	* test.pl: if master isatty, set it also to raw; seems to be needed.
+
+	* Makefile.PL: fixed checks; test problematic constants with a compile.
+	
 2002-01-23   Roland Giersig  <rgiersig@cpan.org>
 
 	* Tty.pm: v0.94_03
