@@ -32,8 +32,8 @@ sub set_raw_pty($) {
   $termios->setattr($ttyno, &POSIX::TCSANOW) or die "setattr: $!";
 }
 
+print "Configuration: $IO::Tty::CONFIG\n";
 print "Checking for appropriate ioctls: ";
-# print "TIOCCONS " if defined TIOCCONS;
 print "TIOCNOTTY " if defined TIOCNOTTY;
 print "TIOCSCTTY " if defined TIOCSCTTY;
 print "TCSETCTTY " if defined TCSETCTTY;
@@ -79,8 +79,11 @@ print "\n";
     $SIG{ALRM} = sub { ok(0); die "Timeout"; };
     alarm(20);
     while (length($ret) < length($s)) {
-      sysread($master, $buf, length($s))
-	or die "Couldn't read anything: $!";
+      $buf = "";
+      my $read = sysread($master, $buf, length($s));
+      die "Read error: $!" if not defined $read;
+      warn "Got EOF" if not $read;
+      die "Didn't get any bytes" if not $buf;
       $ret .= $buf;
     }
     alarm(0);

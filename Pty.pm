@@ -133,12 +133,10 @@ sub spawn {
       }
     }
 
-    # close slave if it has been opened via ->slave
-    close(${*$self}{'io_pty_slave'}) if ${*$self}{'io_pty_slave'};
-
     # Create a new 'session', lose controlling terminal.
-    POSIX::setsid()
-	or warn "setsid() failed, strange behavior may result: $!\r\n" if $^W;
+    if (not POSIX::setsid()) {
+      warn "setsid() failed, strange behavior may result: $!\r\n" if $^W;
+    }
 
     # now open slave, this should set it as controlling tty on some systems
     my $ttyname = ${*$self}{'io_pty_ttyname'};
@@ -147,21 +145,19 @@ sub spawn {
       or croak "Cannot open slave $ttyname: $!";
     $slv->autoflush(1);
 
+    # close slave if it has been opened via ->slave
+    close(${*$self}{'io_pty_slave'}) if ${*$self}{'io_pty_slave'};
+
     # Acquire a controlling terminal if this doesn't happen automatically
     if (defined TIOCSCTTY) {
-      defined ioctl( $slv, TIOCSCTTY, 0 )
-	or warn "warning: TIOCSCTTY failed, child might not have a controlling terminal: $!" if $^W;
+      if (not defined ioctl( $slv, TIOCSCTTY, 0 )) {
+	warn "warning: TIOCSCTTY failed, child might not have a controlling terminal: $!" if $^W;
+      }
     } elsif (defined TCSETCTTY) {
-      defined ioctl( $slv, TCSETCTTY, 0 )
-	or warn "warning: TCSETCTTY failed, child might not have a controlling terminal: $!" if $^W;
+      if (not defined ioctl( $slv, TCSETCTTY, 0 )) {
+	warn "warning: TCSETCTTY failed, child might not have a controlling terminal: $!" if $^W;
+      }
     }
-
-    # redirect console output
-#    if (defined TIOCCONS) {
-#      my $dummy = pack("i", 1);
-#      defined ioctl( $slv, TIOCCONS, $dummy ) or
-#	warn "warning: TIOCCONS failed, console output of child will not be availabe to parent process (check /dev/console mode): $!" if $^W;
-#    }
 
     {
       my $dummy;
@@ -200,7 +196,7 @@ IO::Pty - Pseudo TTY object class
 
 =head1 VERSION
 
-0.92_02 beta
+0.92_03 beta
 
 =head1 SYNOPSIS
 

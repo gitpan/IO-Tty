@@ -1,3 +1,16 @@
+2001-11-27   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.pm: v0.92_03
+
+	* Tty.xs (BOOT): removed export_fail, undefined constants are now
+	undef instead of not exportable; added CONFIG variable.
+
+	* Makefile.PL: added setting of CONFIG var
+
+	* test.pl: added printing of CONFIG var
+
+	* Pty.pm (spawn): fixed bug with $^W handling
+
 2001-11-17   Roland Giersig  <rgiersig@cpan.org>
 
 	* Tty.xs (pty_allocate): complete rewrite, based on ideas from

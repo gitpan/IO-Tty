@@ -142,6 +142,8 @@ chdir($dir) or die "chdir: $!";
 
 open(SUB,">xssubs.c") or die "open: $!";
 
+print SUB qq{sv_setpv(config, "@define");\n};
+
 foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
 	    B230400 B2400 B300 B307200 B38400 B460800 B4800 B50 B57600
 	    B600 B75 B76800 B9600 BRKINT BS0 BS1 BSDLY CBAUD CBAUDEXT
@@ -180,10 +182,9 @@ foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
 
   print SUB <<"EDQ";
 #ifdef $_
-newCONSTSUB(stash,"$_", newSViv($_));
+newCONSTSUB(stash, "$_", newSViv($_));
 #else
-newCONSTSUB(stash,"$_", &PL_sv_undef);
-/*av_push(export_fail, newSVpv("$_",${\(length)}));*/
+newCONSTSUB(stash, "$_", &PL_sv_undef);
 #endif
 EDQ
 }

@@ -636,15 +636,10 @@ InOutStream handle
 BOOT:
  {
     HV *stash;
-    AV *export_fail;
-    GV **gvp,*gv;
+    SV *config;
 
-    stash = gv_stashpvn("IO::Tty::Constant", 17, TRUE);
-    gvp = (GV**)hv_fetch(stash, "EXPORT_FAIL", 11, TRUE);
-    gv = *gvp;
-    if (SvTYPE(gv) != SVt_PVGV)
-      gv_init(gv, stash, "EXPORT_FAIL", 11, TRUE);
-    export_fail = GvAVn(gv);    
+    stash = gv_stashpv("IO::Tty::Constant", TRUE);
+    config = get_sv("IO::Tty::CONFIG", TRUE);    
 #include "xssubs.c"
  }
 
