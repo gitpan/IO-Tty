@@ -1,3 +1,19 @@
+2002-03-06  Roland Giersig  <rgiersig@cpan.org>
+
+	* v0.97_04, final pre-release version
+
+2002-03-04  Roland Giersig  <rgiersig@cpan.org>
+
+	* Pty.pm: v0.97_03
+
+	* Makefile.PL: order of include files is preserved; added test for
+	working cpp.
+
+	* Tty.pm (clone_winsize_from): v0.97_03; added function.
+
+	* Tty.xs (allocate_pty): fixed typo in close for _getpty; changed
+	order of termios.h and termio.h includes
+
 2002-02-26   Roland Giersig  <rgiersig@cpan.org>
 
 	* test.pl: replaced Test.pm

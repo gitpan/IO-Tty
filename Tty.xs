@@ -115,12 +115,12 @@ newCONSTSUB(stash,name,sv)
 # include <sys/stropts.h>
 #endif
 
-#ifdef HAVE_TERMIO_H
-#include <termio.h>
-#endif
-
 #ifdef HAVE_TERMIOS_H
 #include <termios.h>
+#endif
+
+#ifdef HAVE_TERMIO_H
+#include <termio.h>
 #endif
 
 #ifndef O_NOCTTY
@@ -356,9 +356,12 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
     if (namebuf[0] == 0)
 	return 0;		/* we failed to get the slave name */
 
-    if (*ttyfd >= 0)
+    if (*ttyfd >= 0) {
+      make_safe_fd(ptyfd);
+      make_safe_fd(ttyfd);
       return 1;			/* we already have an open slave, so
                                    no more init is needed */
+    }
 
     /*
      * Open the slave side.
@@ -475,7 +478,7 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 		}
 		if (open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 		    break;
-		close(ptyfd);
+		close(*ptyfd);
 		*ptyfd = -1;
 	    } else {
 		if (PL_dowarn)

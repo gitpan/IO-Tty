@@ -42,7 +42,7 @@ print "Checking that returned fd's don't clash with stdin/out/err...\n";
     my $master = new IO::Pty;
     my $slave = $master->slave();
     if ($master->fileno < 3 or $slave->fileno < 3) {
-      exit(1);
+      die 'ERROR: masterfd='.$master->fileno.', slavefd='.$slave->fileno."\n";
     }
     exit(0);
   }

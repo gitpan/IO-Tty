@@ -1,7 +1,4 @@
-#
-# TODO:
-#  probably should export ioctl constants
-#
+# Documentation at the __END__
 
 package IO::Tty;
 
@@ -15,8 +12,8 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = 0.97_01;
-$XS_VERSION = "0.97_01";
+$VERSION = 1.00;
+$XS_VERSION = "1.00";
 @ISA = qw(IO::Handle);
 
 eval { require IO::Stty };
@@ -101,7 +98,7 @@ IO::Tty - Low-level allocate a pseudo-Tty, import constants.
 
 =head1 VERSION
 
-0.97_01 BETA
+1.00
 
 =head1 SYNOPSIS
 
@@ -116,12 +113,14 @@ You wouldn't want to use it directly except to import constants, use
 C<IO::Pty>.  For a list of importable constants, see
 L<IO::Tty::Constant>.
 
-Windows is now supported (under the Cygwin environment, see
-http://sources.redhat.com/cygwin/).
+Windows is now supported, not natively but under the Cygwin
+environment, see L<http://sources.redhat.com/cygwin/>.
 
 Please note that pty creation is very system-dependend.  From my
-experience, any modern POSIX system should be fine.  Find below a
-list of systems that C<IO::Tty> should work on.
+experience, any modern POSIX system should be fine.  Find below a list
+of systems that C<IO::Tty> should work on.  A more detailed table is
+available from the project pages document manager at SourceForge
+L<http://sourceforge.net/projects/expectperl/>.
 
 If you have problems on your system and your system is listed in the
 "verified" list, you probably have some non-standard setup, e.g. you
@@ -131,7 +130,7 @@ Please ask your friendly sysadmin for help.
 If your system is not listed, unpack the latest version of C<IO::Tty>,
 do a C<'perl Makefile.PL; make; make test; uname -a'> and send me
 (F<RGiersig@cpan.org>) the results and I'll see what I can deduce from
-that.
+that.  There are chances that it will work right out-of-the-box...
 
 If it's working on your system, please send me a short note with
 details (version number, distribution, etc. C<'uname -a'> is a good
@@ -145,15 +144,32 @@ test' passes) with comments about "features":
 
 =over 4
 
-=item * Linux 2.2.x & 2.4.x
-
-Returns EIO instead of EOF when the slave is closed.  Benign.
-
 =item * AIX 4.3
 
 Returns EIO instead of EOF when the slave is closed.  Benign.
 
 =item * FreeBSD 4.4
+
+EOF on the slave tty is not reported back to the master.
+
+=item * OpenBSD 2.8
+
+The ioctl TIOCSCTTY sometimes fails.  This is also known in
+Tcl/Expect, see http://expect.nist.gov/FAQ.html
+
+EOF on the slave tty is not reported back to the master.
+
+=item * HPUX 10.20 & 11.00
+
+EOF on the slave tty is not reported back to the master.
+
+=item * IRIX 6.5
+
+=item * Linux 2.2.x & 2.4.x
+
+Returns EIO instead of EOF when the slave is closed.  Benign.
+
+=item * OSF 4.0
 
 EOF on the slave tty is not reported back to the master.
 
@@ -178,18 +194,11 @@ a previous version worked on them:
 
 =over 4
 
-=item * OpenBSD 2.8
+=item * SCO Unix
 
-The ioctl TIOCSCTTY sometimes fails.  This is also known in
-Tcl/Expect, see http://expect.nist.gov/FAQ.html
+=item * NetBSD
 
-=item * SCO Unix v??
-
-=item * HPUX 10.20 & 11.00
-
-EOF on the slave tty is not reported back to the master.
-
-=item * OSF 4.0
+probably the same as the other *BSDs...
 
 =back
 
@@ -199,7 +208,8 @@ E<lt>F<RGiersig@cpan.org>E<gt>.
 
 =head1 SEE ALSO
 
-L<IO::Pty>, L<IO::Tty::Constant>, L<Expect>
+L<IO::Pty>, L<IO::Tty::Constant>
+
 
 =head1 MAILING LISTS
 

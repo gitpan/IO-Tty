@@ -8,7 +8,7 @@ $^W=1;
 
 my %define;
 my @libs;
-my $Package_Version = '0.97_01';  # keep this consistent with Tty.pm
+my $Package_Version = '1.00';  # keep this consistent with Tty.pm
 my $Is_Beta = ($Package_Version =~ m/_/);
 
 open(SUB, ">xssubs.c") or die "open: $!";
@@ -64,15 +64,31 @@ int main () { return 0; }
 ESQ
 close(TST);
 
-if (system("$Config{'cc'} $Config{'cppflags'} compilerok.c > compilerok.log 2>&1")) {
-  die <<"EDQ";
+if (system("$Config{'cpp'} $Config{'cppflags'} compilerok.c > preprocessorok.log 2>&1")) {
+  die <<"__EOT__";
 
-ERROR: cannot run the configured compiler $Config{'cc'}
-(see conf/compilerok.log).  Maybe you should build perl by yourself?
+ERROR: cannot run the configured preprocessor '$Config{'cpp'}'
+(see conf/preprocessor.log).  Please fix this by adjusting
+perls Config.pm, creating a symlink to the right location
+or maybe by just adding it to your PATH.  You could also build
+perl yourself.
 
-EDQ
+__EOT__
 }
-unlink "compilerok.c", "compilerok.log";
+
+if (system("$Config{'cc'} $Config{'ccflags'} compilerok.c > compilerok.log 2>&1")) {
+  die <<"__EOT__";
+
+ERROR: cannot run the configured compiler '$Config{'cc'}'
+(see conf/compilerok.log).  Please fix this by adjusting
+perls Config.pm, creating a symlink to the right location
+or maybe by just adding it to your PATH.  You could also build
+perl yourself.
+
+__EOT__
+}
+
+unlink qw(compilerok.c compilerok.log preprocessorok.log);
 
 # checking for various functions
 
@@ -128,7 +144,7 @@ ESQ
 
   close(TST);
   print "Looking for $f()" . "." x (13-length($f)) . " ";
-  if (system("$Config{'cc'} $Config{'cppflags'} $funcs{$f} functest_$f.c > functest_$f.log 2>&1")) {
+  if (system("$Config{'cc'} $Config{'ccflags'} $funcs{$f} functest_$f.c > functest_$f.log 2>&1")) {
     print "not found.\n";
   } else {
     $define{"-DHAVE_\U$f"} = undef;
@@ -140,7 +156,8 @@ ESQ
 
 # find various headerfiles
 
-my @headers = qw(libutil.h util.h pty.h sys/stropts.h termio.h termios.h);
+my @headers = qw(termios.h termio.h libutil.h util.h pty.h sys/stropts.h);
+my %headers;
 
 foreach my $h (sort @headers) {
   my $def = $h;
@@ -153,10 +170,11 @@ int main () { return 0; }
 ESQ
   close(TST);
   print "Looking for $h" . "." x (15-length($h)) . " ";
-  if(system("$Config{'cc'} $Config{'cppflags'} headtest_$def.c > headtest_$def.log 2>&1")) {
+  if(system("$Config{'cc'} $Config{'ccflags'} headtest_$def.c > headtest_$def.log 2>&1")) {
     print "not found.\n"
   }
   else {
+    $headers{$h} = undef;
     $define{"-DHAVE_\U$def"} = $h;
     print "FOUND.\n";
     unlink "headtest_$def.c", "headtest_$def.log";
@@ -213,8 +231,8 @@ print CPPIN <<_EOT_;
 #include <sys/types.h>
 _EOT_
 
-foreach my $def (keys %define) {
-  print CPPIN "#include <$define{$def}>\n" if defined $define{$def};
+foreach my $h (@headers) {
+  print CPPIN "#include <$h>\n" if exists $headers{$h};
 }
 
 foreach my $s (sort @ttsyms) {
@@ -228,14 +246,19 @@ _EOT_
 }
 close CPPIN;
 
-if(system("$Config{'cpp'} $Config{'ccflags'} @{[keys %define]} ttsymsdefined.in > ttsymsdefined.out")) {
-  die "cannot run cpp";
+if(system("$Config{'cpp'} $Config{'cppflags'} @{[keys %define]} ttsymsdefined.in > ttsymsdefined.out")) {
+  die "ERROR: cannot run cpp";
 }
 
 open (CPPOUT, "ttsymsdefined.out") or die "open: $!";
 my %ttsyms_exist = map {($_, undef)}
   grep {s/^EXISTS "(\w+)".*$/$1/s} (<CPPOUT>);
 close CPPOUT;
+
+die <<__EOT__ if not (keys %ttsyms_exist);
+ERROR: no symbols defined at all?!  I don't believe it, there must be a
+compilation error somewhere!
+__EOT__
 
 print <<_EOT_;
 Checking if defined symbols compile OK...
@@ -249,8 +272,8 @@ foreach my $s (sort @ttsyms) {
   if (exists $ttsyms_exist{$s}) {
     open(TST,">ttsymtest_$s.c") or die "open: $!";
     print TST "#include <sys/types.h>\n";
-    foreach my $def (keys %define) {
-      print TST "#include <$define{$def}>\n" if defined $define{$def};
+    foreach my $h (@headers) {
+      print TST "#include <$h>\n" if exists $headers{$h};
     }
     print TST "int main () { int x; x = $s; return 0; }\n";
     close(TST);

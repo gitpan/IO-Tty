@@ -7,16 +7,17 @@ To build this distribution, run
   make test
   make install
 
-ALL BRAND NEW!! (BETA)
+ALL BRAND NEW!!
 
 I finally took the time to give the pty-allocation part a complete
 overhaul.  Thanks to openssh and Xemacs teams for providing me with a
 lot of inspiration through their own pty-allocation codes.
 
 I also removed the spawn code, as this doesn't fit thematically in
-here.  Look into 'try' to see how it is done by hand.  Problems with
-ackquiring a controlling terminal should also be fixed.  Please read
-the manpages, there is a lot new (e.g. IO::Tty::Constant).
+here.  Look into 'try' or 'test.pl' to see how it is done by hand.
+Problems with ackquiring a controlling terminal should also be fixed
+and propagating terminal size changes is now supported.  Please read
+the manpages, there is a lot of new stuff (e.g. IO::Tty::Constant).
 
 Please note that pty creation is very system-dependend.  I am
 beginning to get an overview, but there are a *lot* of different
@@ -25,21 +26,31 @@ me (<RGiersig@cpan.org>) the output of a manual installation ('perl
 Makefile.PL; make; make test;') and I'll see what I can deduce from
 it.
 
-Supported systems include Linux, Solaris, AIX, OSF, *BSD, HP-UX and
-finally Windows (under the Cygwin environment, see
+Supported systems include Linux, Solaris, AIX, OSF, *BSD, IRIX, HP-UX
+and finally Windows (under the Cygwin environment, see
 http://sources.redhat.com/cygwin/).  See the IO::Tty manpage for a
-detailed list.
-
-If it's working on your system, please send me a short note with
-details (version number, distribution, etc. 'uname -a' is a good
-start) so I can get an overview.  Thanks!
+detailed list.  I also compiled an overview table, find it in the
+project pages document manager at SourceForge
+(http://sourceforge.net/projects/expectperl/).
 
 Sorry, ActiveState Perl is not supported, basically because there are
 no pseudo-terminals under Windows.  If somebody from ActiveState reads
 this and wants to work on it, please contact me, maybe we could use
 the equivalent of pipes to emulate the behaviour.
 
+If it's working on your system, please send me a short note with
+details (version number, distribution, etc. 'uname -a' is a good
+start) so I can get an overview.  Thanks!
+
 See the ChangeLog and the docs for details.
 
+Oh, and many thanks to all testers, without their support this project
+would still be limited to a few systems that I have access to.  Thanks
+also to SourceForge (http://sf.net) who is hosting this and many other
+projects, their services have made development and support a real
+pleasure.  If you intend to donate something to the Open Source cause,
+think about lending them a machine for their compile farm!
+
+
 Roland <RGiersig@cpan.org>
-2002-02-26
+2002-03-12

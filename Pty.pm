@@ -10,7 +10,7 @@ require POSIX;
 
 use vars qw(@ISA $VERSION);
 
-$VERSION = 0.97_01; # keep same as in Tty.pm
+$VERSION = 1.00; # keep same as in Tty.pm
 
 @ISA = qw(IO::Handle);
 eval { require IO::Stty };
@@ -148,7 +148,7 @@ IO::Pty - Pseudo TTY object class
 
 =head1 VERSION
 
-0.97_01 BETA
+1.00
 
 =head1 SYNOPSIS
 
@@ -203,21 +203,22 @@ purpose only, to get a slave filehandle, use slave().
 
 The C<slave> method will return the slave filehandle of the given
 master pty, opening it anew if necessary.  If IO::Stty is installed,
-you can then call $slave->stty() to modify the terminal settings.
+you can then call C<$slave-E<gt>stty()> to modify the terminal settings.
 
 =item close_slave()
 
 The slave filehandle will be closed and destroyed.  This is necessary
 in the parent after forking to get rid of the open filehandle,
 otherwise the parent will not notice if the child exits.  Subsequent
-calls of slave() will return a newly opened slave filehandle.
+calls of C<slave()> will return a newly opened slave filehandle.
 
 =item make_slave_controlling_terminal()
 
 This will set the slave filehandle as the controlling terminal of the
 current process, which will become a session leader, so this should
 only be called by a child process after a fork(), e.g. in the callback
-to sync_exec() (see L<Proc::SyncExec>).
+to C<sync_exec()> (see L<Proc::SyncExec>).  See the C<try> script
+(also C<test.pl>) for an example how to correctly spawn a subprocess.
 
 =item set_raw()
 
@@ -246,6 +247,8 @@ idea if setting terminal sizes there is passed through to the slave,
 so if this method is called for a master that is not a tty, it
 silently returns OK.
 
+See the C<try> script for example code how to propagate SIGWINCH.
+
 =back
 
 
@@ -265,6 +268,7 @@ expectperl-discuss, at
 and
 
   http://lists.sourceforge.net/lists/listinfo/expectperl-discuss
+
 
 =head1 AUTHORS
 
