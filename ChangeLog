@@ -1,3 +1,19 @@
+2002-01-07   Roland Giersig  <rgiersig@cpan.org>
+
+	* Pty.pm: adapted to new interface
+	(close_slave): added for keeping open filecount straight
+	(make_slave_controlling_terminal): created anew
+	(slave): reverted from open_slave()
+
+	* Tty.pm: v0.94_01
+
+	* test.pl: adapted to new interface
+
+	* Tty.xs: reverted to opening slave at creation time; added debug
+	printfs
+	(open_slave): use ptsname_r if there, forget about erroneous ttyname.
+	(allocate_pty): added name param on openpty (doesn't take NULL for name)
+	
 2001-11-28   Roland Giersig  <rgiersig@cpan.org>
 
 	* Tty.pm: v0.92_04

@@ -10,6 +10,14 @@ $|=1; # to see output immediately
 
 my %define;
 my @libs;
+my $Is_Beta = 1;
+
+warn "WARNING: perl versions prior to 5.00503 may have problems.\n"
+  if $] < 5.00503;
+
+# improve backward-compatibility
+@define{qw(-DPL_sv_undef=sv_undef -DPL_dowarn=dowarn)} = (1, 1)
+  if $] < 5.004_05;
 
 print "Now let's see what we can find out about your system...\n";
 
@@ -51,6 +59,7 @@ if (system("$Config{'cc'} $Config{'cppflags'} compilerok.c")) {
   die <<"EDQ";
 
 ERROR: cannot run the configured compiler $Config{'cc'}
+Maybe you should build perl by yourself?
 
 EDQ
 }
@@ -66,6 +75,7 @@ my %funcs = (ttyname   => "",
 	     unlockpt  => "",
 	     getpt     => "",
 	     ptsname   => "",
+	     ptsname_r => "",
 	    );
 
 foreach my $f (keys %funcs) {
@@ -192,15 +202,6 @@ EDQ
 }
 close(SUB);
 
-my @ppd;
-
-if ($] >= 5.00503) {
-  @ppd = (
-    AUTHOR    => 'Graham Barr <gbarr@pobox.com>, Roland Giersig <RGiersig@cpan.org',
-    ABSTRACT  => 'Pseudo tty\'s and constants'
-  );
-}
-
 my $all_ok = 1;
 foreach my $check
   (
@@ -225,9 +226,26 @@ print "Configuration looks good.\n" if $all_ok;
 
 print "DEFINE = @{[sort keys %define]}\n";
 
+print <<'__EOT__' if $Is_Beta;
+**********************************************************************
+WARNING: this is a BETA version.  If it works, good for you, if not,
+tell me, <RGiersig@cpan.org> about it (including full output of 
+'perl Makefile.PL; make; make test;') and I'll see what I can do.
+**********************************************************************
+__EOT__
+
+my @ppd;
+
+if ($] >= 5.00503) {
+  @ppd = (
+    AUTHOR    => 'Graham Barr <gbarr@pobox.com>, Roland Giersig <RGiersig@cpan.org',
+    ABSTRACT  => 'Pseudo tty\'s and constants'
+  );
+}
+
 WriteMakefile(
     'NAME'	    => 'IO::Tty',
-    'VERSION_FROM'  => "Tty.pm",
+    'VERSION_FROM'  => 'Tty.pm',
     'DEFINE'	    => join(" ", keys %define),
     'LIBS'          => join(" ", @libs),
     'clean'	    => {'FILES' => 'xssubs.c conf'},

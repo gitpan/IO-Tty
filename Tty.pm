@@ -12,7 +12,7 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION);
 
-$VERSION = $XS_VERSION = "0.92_04";
+$VERSION = $XS_VERSION = "0.94_01";
 @ISA = qw(IO::Handle);
 
 eval { require IO::Stty };
@@ -97,7 +97,7 @@ IO::Tty - Low-level allocate a pseudo-Tty
 
 =head1 VERSION
 
-0.92_04 beta
+0.94_01 BETA
 
 =head1 SYNOPSIS
 
@@ -152,6 +152,11 @@ Tcl/Expect, see http://expect.nist.gov/FAQ.html
 
 =item * SCO Unix v??
 
+=item * HPUX 10.20 & 11.00
+
+There seems to be no way to send an EOF from the slave to the master,
+so a parent process might not notice that the child went away.
+
 =item * OSF 4.0
 
 =item * Solaris 2.6 & 8
@@ -170,7 +175,7 @@ E<lt>F<RGiersig@cpan.org>E<gt>.
 
 =head1 SEE ALSO
 
-L<IO::Pty>
+L<IO::Pty>, L<Expect>
 
 =head1 MAILING LISTS
 

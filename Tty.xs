@@ -2,6 +2,8 @@
 #include "perl.h"
 #include "XSUB.h"
 
+#define PTY_DEBUG 1
+
 #ifdef PerlIO
 typedef int SysRet;
 typedef PerlIO * InOutStream;
@@ -85,8 +87,9 @@ newCONSTSUB(stash,name,sv)
  * copyright messages attached.
  */
 
-
 #include <unistd.h>
+#include <stdlib.h>
+#include <stdio.h>
 #include <fcntl.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -242,47 +245,13 @@ strlcpy(dst, src, siz)
  * initialize and open the slave.
  */
 
+#if defined (HAVE_PTSNAME)
+char * ptsname(int);
+#endif
+
 static int
 open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 { 
-    /*
-     * find the slave name, if we don't have it already
-     */
-    
-#if defined (HAVE_PTSNAME)
-    if (namebuf[0] == 0) {
-	char * name;
-	name = ptsname(*ptyfd);
-	if (name) {
-	    strlcpy(namebuf, name, namebuflen);
-	} else {
-	    if (PL_dowarn)
-		warn("IO::Tty::open_slave(nonfatal): ptsname(): %.100s", strerror(errno));
-	}
-    }
-#endif /* HAVE_PTSNAME */
-
-#if defined (HAVE_TTYNAME)
-    if (namebuf[0] == 0) {
-	char * name;
-	name = ttyname(*ptyfd);
-	if (name) {
-	    strlcpy(namebuf, name, namebuflen);
-	} else {
-	    if (PL_dowarn)
-		warn("IO::Tty::open_slave(nonfatal): ttyname(): %.100s", strerror(errno));
-	}
-    }
-#endif /* HAVE_TTYNAME */
-
-
-    if (namebuf[0] == 0)
-	return 0;		/* we failed to get the slave name */
-
-    if (*ttyfd >= 0)
-      return 1;			/* we already have an open slave, so
-                                   no more init is needed */
-
     /*
      * now do some things that are supposedly healthy for ptys,
      * i.e. changing the access mode.
@@ -292,12 +261,18 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	mysig_t old_signal;
 	old_signal = mysignal(SIGCHLD, SIG_DFL);
 #if defined(HAVE_GRANTPT)
+#if PTY_DEBUG
+	fprintf(stderr, "trying grantpt()...\n");
+#endif
 	if (grantpt(*ptyfd) < 0) {
 	    if (PL_dowarn)
 		warn("IO::Tty::pty_allocate(nonfatal): grantpt(): %.100s", strerror(errno));
 	}
 #endif /* HAVE_GRANTPT */
 #if defined(HAVE_UNLOCKPT)
+#if PTY_DEBUG
+	fprintf(stderr, "trying unlockpt()...\n");
+#endif
 	if (unlockpt(*ptyfd) < 0) {
 	    if (PL_dowarn)
 		warn("IO::Tty::pty_allocate(nonfatal): unlockpt(): %.100s", strerror(errno));
@@ -309,17 +284,58 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
  
 
     /*
+     * find the slave name, if we don't have it already
+     */
+    
+#if defined (HAVE_PTSNAME_R)
+    if (namebuf[0] == 0) {
+#if PTY_DEBUG
+	fprintf(stderr, "trying ptsname_r()...\n");
+#endif
+	if(ptsname_r(*ptyfd, namebuf, namebuflen)) {
+	    if (PL_dowarn)
+		warn("IO::Tty::open_slave(nonfatal): ptsname_r(): %.100s", strerror(errno));
+	}
+    }
+#endif /* HAVE_PTSNAME_R */
+
+#if defined (HAVE_PTSNAME)
+    if (namebuf[0] == 0) {
+	char * name;
+#if PTY_DEBUG
+	fprintf(stderr, "trying ptsname()...\n");
+#endif
+	name = ptsname(*ptyfd);
+	if (name) {
+	    strlcpy(namebuf, name, namebuflen);
+	} else {
+	    if (PL_dowarn)
+		warn("IO::Tty::open_slave(nonfatal): ptsname(): %.100s", strerror(errno));
+	}
+    }
+#endif /* HAVE_PTSNAME */
+
+    if (namebuf[0] == 0)
+	return 0;		/* we failed to get the slave name */
+
+    if (*ttyfd >= 0)
+      return 1;			/* we already have an open slave, so
+                                   no more init is needed */
+
+    /*
      * Open the slave side.
      */
+#if PTY_DEBUG
+    fprintf(stderr, "trying to open %s...\n", namebuf);
+#endif
+
+    *ttyfd = open(namebuf, O_RDWR | O_NOCTTY);
     if (*ttyfd < 0) {
-	*ttyfd = open(namebuf, O_RDWR | O_NOCTTY);
-	if (*ttyfd < 0) {
-	    if (PL_dowarn)
-		warn("IO::Tty::open_slave(nonfatal): open(%.200s): %.100s",
-		     namebuf, strerror(errno));
-	    close(*ptyfd);
-	    return 0;		/* too bad, couldn't open slave side */
-	}
+      if (PL_dowarn)
+	warn("IO::Tty::open_slave(nonfatal): open(%.200s): %.100s",
+	     namebuf, strerror(errno));
+      close(*ptyfd);
+      return 0;		/* too bad, couldn't open slave side */
     }
 
 #if defined (I_PUSH)
@@ -329,6 +345,9 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
      * We simply try to push all relevant modules but warn only on
      * those platforms we know these are required.
      */
+#if PTY_DEBUG
+    fprintf(stderr, "trying to I_PUSH ptem...\n");
+#endif
     if (ioctl(*ttyfd, I_PUSH, "ptem") < 0)
 #if defined (__solaris) || defined(__hpux)
 	if (PL_dowarn)
@@ -336,6 +355,9 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #endif
 	      ;
 
+#if PTY_DEBUG
+    fprintf(stderr, "trying to I_PUSH ldterm...\n");
+#endif
     if (ioctl(*ttyfd, I_PUSH, "ldterm") < 0)
 #if defined (__solaris) || defined(__hpux)
 	if (PL_dowarn)
@@ -343,6 +365,9 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #endif
 	      ;
 
+#if PTY_DEBUG
+    fprintf(stderr, "trying to I_PUSH ttcompat...\n");
+#endif
     if (ioctl(*ttyfd, I_PUSH, "ttcompat") < 0)
 #if defined (__solaris)
 	if (PL_dowarn)
@@ -365,7 +390,7 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
  */
 
 static int
-pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
+allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 {
     *ptyfd = -1;
     *ttyfd = -1;
@@ -376,45 +401,29 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
      */
     do { /* we use do{}while(0) and break instead of goto */
 
-#if defined(HAVE_OPENPTY)
-	/* openpty(3) exists in a variety of OS'es */
-	{
-	    mysig_t old_signal;
-	    int ret;
-
-	    old_signal = mysignal(SIGCHLD, SIG_DFL);
-	    ret = openpty(ptyfd, ttyfd, NULL, NULL, NULL);
-	    mysignal(SIGCHLD, old_signal);
-	    if (ret >= 0 && *ptyfd >= 0
-		&& open_slave(ptyfd, ttyfd, namebuf, namebuflen))
-		break;
-	    *ptyfd = -1;
-	    if (PL_dowarn)
-		warn("IO::Tty::pty:allocate(nonfatal): openpty(): %.100s", strerror(errno));
-	}
-#endif
-
-#if defined(HAVE_GETPT)
-	/* glibc defines this */
-	*ptyfd = getpt();
-	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
-	    break;		/* got one */
-	if (PL_dowarn)
-	    warn("IO::Tty::pty_allocate(nonfatal): getpt(): %.100s", strerror(errno));
-#endif
-
 #if defined(HAVE__GETPTY)
 	/* _getpty(3) for SGI Irix */
 	{
 	    char *slave;
+	    mysig_t old_signal;
+
+#if PTY_DEBUG
+	    fprintf(stderr, "trying _getpty()...\n");
+#endif
+	    /* _getpty spawns a suid prog, so don't ignore SIGCHLD */
+    	    old_signal = mysignal(SIGCHLD, SIG_DFL);
 	    slave = _getpty(ptyfd, O_RDWR, 0622, 0);
+	    mysignal(SIGCHLD, old_signal);
+
 	    if (slave != NULL) {
-		strlcpy(namebuf, slave, namebuflen);
+	        strlcpy(namebuf, slave, namebuflen);
 		if (open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 		    break;
+		close(ptyfd);
+		*ptyfd = -1;
 	    } else {
 		if (PL_dowarn)
-		    warn("IO::Tty::pty_allocate(nonfatal): _getpty(): %.100s", strerror(errno));
+		    warn("pty_allocate(nonfatal): _getpty(): %.100s", strerror(errno));
 		*ptyfd = -1;
 	    }
 	}
@@ -425,37 +434,91 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	 */
 
 #if defined(HAVE_DEV_PTMX)
+#if PTY_DEBUG
+	fprintf(stderr, "trying /dev/ptmx...\n");
+#endif
+
 	*ptyfd = open("/dev/ptmx", O_RDWR | O_NOCTTY);
 	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 	    break;
 	if (PL_dowarn)
-	    warn("IO::Tty::pty_allocate(nonfatal): open(/dev/ptmx): %.100s", strerror(errno));
+	    warn("pty_allocate(nonfatal): open(/dev/ptmx): %.100s", strerror(errno));
 #endif /* HAVE_DEV_PTMX */ 
 
 #if defined(HAVE_DEV_PTYM_CLONE)
+#if PTY_DEBUG
+	fprintf(stderr, "trying /dev/ptym/clone...\n");
+#endif
+
 	*ptyfd = open("/dev/ptym/clone", O_RDWR | O_NOCTTY);
 	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 	    break;
 	if (PL_dowarn)
-	    warn("IO::Tty::pty_allocate(nonfatal): open(/dev/ptym/clone): %.100s", strerror(errno));
+	    warn("pty_allocate(nonfatal): open(/dev/ptym/clone): %.100s", strerror(errno));
 #endif /* HAVE_DEV_PTYM_CLONE */
 
 #if defined(HAVE_DEV_PTC)
 	/* AIX-style pty code. */
+#if PTY_DEBUG
+	fprintf(stderr, "trying /dev/ptc...\n");
+#endif
+
 	*ptyfd = open("/dev/ptc", O_RDWR | O_NOCTTY);
 	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 	    break;
 	if (PL_dowarn)
-	    warn("IO::Tty::pty_allocate(nonfatal): open(/dev/ptc): %.100s", strerror(errno));
+	    warn("pty_allocate(nonfatal): open(/dev/ptc): %.100s", strerror(errno));
 #endif /* HAVE_DEV_PTC */
 
 #if defined(HAVE_DEV_PTMX_BSD)
+#if PTY_DEBUG
+	fprintf(stderr, "trying /dev/ptmx_bsd...\n");
+#endif
 	*ptyfd = open("/dev/ptmx_bsd", O_RDWR | O_NOCTTY);
 	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
 	    break;
 	if (PL_dowarn)
-	    warn("IO::Tty::pty_allocate(nonfatal): open(/dev/ptmx_bsd): %.100s", strerror(errno));
+	    warn("pty_allocate(nonfatal): open(/dev/ptmx_bsd): %.100s", strerror(errno));
 #endif /* HAVE_DEV_PTMX_BSD */ 
+
+	/* try high-level stuff */
+
+#if defined(HAVE_OPENPTY)
+	/* openpty(3) exists in a variety of OS'es */
+	{
+	    mysig_t old_signal;
+	    int ret;
+	    char name[PATH_MAX+1];
+
+#if PTY_DEBUG
+	    fprintf(stderr, "trying openpty()...\n");
+#endif
+	    old_signal = mysignal(SIGCHLD, SIG_DFL);
+	    ret = openpty(ptyfd, ttyfd, name, NULL, NULL);
+	    mysignal(SIGCHLD, old_signal);
+	    if (ret >= 0 && *ptyfd >= 0) {
+	        strlcpy(namebuf, name, namebuflen);
+		if (open_slave(ptyfd, ttyfd, namebuf, namebuflen))
+		    break;
+	    }
+	    *ptyfd = -1;
+	    *ttyfd = -1;
+	    if (PL_dowarn)
+		warn("pty_allocate(nonfatal): openpty(): %.100s", strerror(errno));
+	}
+#endif
+
+#if defined(HAVE_GETPT)
+	/* glibc defines this */
+#if PTY_DEBUG
+	fprintf(stderr, "trying getpt()...\n");
+#endif
+	*ptyfd = getpt();
+	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
+	    break;		/* got one */
+	if (PL_dowarn)
+	    warn("pty_allocate(nonfatal): getpt(): %.100s", strerror(errno));
+#endif
 
 	/*
 	 * we still don't have a pty, so try some oldfashioned stuff, 
@@ -474,6 +537,9 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 		highpty = 128;
 #else
 	    highpty = 128;
+#endif
+#if PTY_DEBUG
+	    fprintf(stderr, "trying CRAY /dev/pty/???...\n");
 #endif
 	    for (i = 0; i < highpty; i++) {
 		snprintf(buf, sizeof(buf), "/dev/pty/%03d", i);
@@ -499,6 +565,9 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    int num_minors = strlen(ptyminors);
 	    int num_ptys = strlen(ptymajors) * num_minors;
 	    
+#if PTY_DEBUG
+	    fprintf(stderr, "trying HPUX /dev/ptym/pty[a-ce-z][0-9a-f]...\n");
+#endif
 	    /* try /dev/ptym/pty[a-ce-z][0-9a-f] */
 	    for (i = 0; i < num_ptys; i++) {
 		snprintf(buf, sizeof buf, "/dev/ptym/pty%c%c",
@@ -517,6 +586,9 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    if (*ptyfd >= 0)
 		break;
 
+#if PTY_DEBUG
+	    fprintf(stderr, "trying HPUX /dev/ptym/pty[a-ce-z][0-9][0-9]...\n");
+#endif
 	    /* now try /dev/ptym/pty[a-ce-z][0-9][0-9] */
 	    num_minors = 100;
 	    num_ptys = strlen(ptymajors) * num_minors;
@@ -548,6 +620,9 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    int num_minors = strlen(ptyminors);
 	    int num_ptys = strlen(ptymajors) * num_minors;
 
+#if PTY_DEBUG
+	    fprintf(stderr, "trying BSD /dev/pty??...\n");
+#endif
 	    for (i = 0; i < num_ptys; i++) {
 		snprintf(buf, sizeof buf, "/dev/pty%c%c",
 			 ptymajors[i / num_minors],
@@ -572,12 +647,11 @@ pty_allocate(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 
     } while (0);
 
-    if (*ptyfd < 0 || *ttyfd < 0 || namebuf[0] == 0)
+    if (*ptyfd < 0 || namebuf[0] == 0)
 	return 0;		/* we failed to allocate one */
 
-
     return 1;			/* whew, finally finished successfully */
-} /* end pty_allocate */
+} /* end allocate_pty */
 
 
 
@@ -586,13 +660,13 @@ MODULE = IO::Tty	PACKAGE = IO::Pty
 PROTOTYPES: DISABLE
 
 void
-allocate_pty()
+pty_allocate()
     INIT:
 	int ptyfd, ttyfd, ret;
 	char name[256];
 
     PPCODE:
-	ret = pty_allocate(&ptyfd, &ttyfd, name, sizeof(name));
+	ret = allocate_pty(&ptyfd, &ttyfd, name, sizeof(name));
 	if (ret) {
 	    name[sizeof(name)-1] = 0;
 	    EXTEND(SP,3);
@@ -602,6 +676,7 @@ allocate_pty()
         } else {
 	    /* empty list */
 	}
+
 
 MODULE = IO::Tty	PACKAGE = IO::Tty
 
@@ -634,13 +709,13 @@ InOutStream handle
 
 
 BOOT:
- {
-    HV *stash;
-    SV *config;
-
-    stash = gv_stashpv("IO::Tty::Constant", TRUE);
-    config = perl_get_sv("IO::Tty::CONFIG", TRUE);    
+{
+  HV *stash;
+  SV *config;
+  
+  stash = gv_stashpv("IO::Tty::Constant", TRUE);
+  config = perl_get_sv("IO::Tty::CONFIG", TRUE);    
 #include "xssubs.c"
- }
+}
 
 

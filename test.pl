@@ -18,7 +18,7 @@ my @Strings =
    "\r\r\n\r\b\n\r\0x00\0xFF",
   );
 
-plan tests => @Strings*2 + 4;
+plan tests => @Strings*2 + 2;
 
 sub set_raw_pty($) {
   my $ttyno = fileno(shift);
@@ -39,37 +39,41 @@ print "TIOCSCTTY " if defined TIOCSCTTY;
 print "TCSETCTTY " if defined TCSETCTTY;
 print "\n";
 
-# first check if we can detect a spawn error
-{
-  $! = 0;
-  $SIG{ALRM} = sub { ok(0); die "Timeout"; };
-  alarm(10);
-  my $pty = IO::Pty->spawn("unknown_program_test_IGNORE_THIS_ERROR_ahat44535jtrbni43uh5");
-  alarm(0);
-  ok(not defined $pty);
-  ok($!);
-}
-
 # now for the echoback tests
 {
   my $master = new IO::Pty;
   print "isatty(\$master): ", POSIX::isatty($master)? "YES\n": "NO\n";
+#  if (POSIX::isatty($master)) {
+#    eval { set_raw_pty($master); };
+#    warn "warning: set_raw_pty(\$master): $@\n" if $@;
+#  }
 
-  if (POSIX::isatty($master)) {
-    eval { set_raw_pty($master); };
-    warn "warning: set_raw_pty(\$master): $@\n" if $@;
-  }
-
-  my $slave = $master->slave();
-  print "isatty(\$slave): ", POSIX::isatty($slave)? "YES\n": "NO\n";
-
-  if (POSIX::isatty($slave)) {
+  pipe(FROM_CHILD, TO_PARENT)
+    or die "Cannot create pipe: $!";
+  my $pid = fork();
+  die "Cannot fork" if not defined $pid;
+  unless ($pid) {
+    # child sends back everything inverted
+    my $c;
+    my $slave = $master->slave();
+    close $master;
     eval { set_raw_pty($slave); };
     warn "warning: set_raw_pty(\$slave): $@\n" if $@;
+    close FROM_CHILD;
+    print TO_PARENT "\n";
+    close TO_PARENT;
+    while(1) { 
+      sysread($slave, $c, 1);
+      print ".";
+      syswrite($slave, ~$c, 1);
+    }
   }
-
-  $master->spawn($Perl, "-e", 'while(1){sysread(STDIN,$c,1);syswrite(STDOUT,~$c,1)}')
-    or die "Cannot spawn test program";
+  close TO_PARENT;
+  $master->close_slave();
+  my $dummy;
+  my $stat = sysread(FROM_CHILD, $dummy, 1);
+  die "Cannot sync with child: $!" if not defined $stat;
+  close FROM_CHILD;
 
   # parent sends down some strings and expects to get them back inverted
   foreach my $s (@Strings) {
@@ -77,7 +81,7 @@ print "\n";
     my $ret = "";
     syswrite($master, $s, length($s));
     $SIG{ALRM} = sub { ok(0); die "Timeout"; };
-    alarm(20);
+    alarm(10);
     while (length($ret) < length($s)) {
       $buf = "";
       my $read = sysread($master, $buf, length($s));
@@ -87,33 +91,63 @@ print "\n";
       $ret .= $buf;
     }
     alarm(0);
+    print "\n";
     ok(length($s), length($ret));
     ok($ret, ~$s);
   }
-  kill TERM => $master->slave_pid;
+  kill TERM => $pid;
 }
 
 # test if child gets pty as controlling terminal
 {
-  my $child = IO::Pty->spawn ($Perl . q{ -MIO::Handle -e 'open(TTY, "+>/dev/tty") or die "no controlling terminal"; autoflush TTY 1; print TTY "gimme on /dev/tty: "; $s = <TTY>; chomp $s; print "back on STDOUT: \U$s\n"; close TTY; close STDOUT; close STDERR; exit 0;'}) # })
-    or die "Cannot spawn $Perl: $!\n";
+  my $master = new IO::Pty;
+
+  pipe(FROM_CHILD, TO_PARENT)
+    or die "Cannot create pipe: $!";
+  my $pid = fork();
+  die "Cannot fork" if not defined $pid;
+  unless ($pid) {
+    # child 
+    $master->make_slave_controlling_terminal();
+    my $slave = $master->slave();
+    close $master;
+    close FROM_CHILD;
+    print TO_PARENT "\n";
+    close TO_PARENT;
+    open(TTY, "+>/dev/tty") or die "no controlling terminal";
+    autoflush TTY 1;
+    print TTY "gimme on /dev/tty: ";
+    my $s = <TTY>;
+    chomp $s;
+    print $slave "back on STDOUT: \U$s\n";
+    close TTY; close $slave;
+    exit 0;
+  }
+
+  close TO_PARENT;
+  $master->close_slave();
+  my $dummy;
+  my $stat = sysread(FROM_CHILD, $dummy, 1);
+  die "Cannot sync with child: $!" if not defined $stat;
+  close FROM_CHILD;
 
   my ($s, $chunk);
   $SIG{ALRM} = sub { ok(0); die "Timeout ($s)"; };
   alarm(10);
 
-  sysread($child, $s, 100) or die "sysread() failed: $!";
+  sysread($master, $s, 100) or die "sysread() failed: $!";
   ok($s =~ m/gimme.*:/);
 
-  print $child "seems OK!\n";
+  print $master "seems OK!\n";
 
   # collect all responses
-  while (sysread($child, $chunk, 100)) {
+  while (sysread($master, $chunk, 100)) {
     $s .= $chunk;
   }
   print $s;
   ok($s =~ m/back on STDOUT: SEEMS OK!/);
   alarm(0);
+  kill TERM => $pid;
 }
 
 

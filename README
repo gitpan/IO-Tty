@@ -7,16 +7,15 @@ To build this distribution run
   make test
   make install
 
-ALL BRAND NEW!!
+ALL BRAND NEW!! (BETA)
 
 I finally took the time to give the pty-allocation part a complete
 overhaul.  Thanks to openssh and Xemacs teams for providing me with a
 lot of inspiration through their own pty-allocation codes.
 
-I also used a few ideas in the spawn code of Tcl/Expect (thanks,
-Don!), so stability should be vastly improved, especially with
-spawning ssh and friends (no "no controlling terminal" error any
-more).
+I also removed the spawn code, as this doesn't fit thematically in
+here.  Look into 'try' to see how it is done by hand.  Problems
+with ackquiring a controlling terminal should also be fixed.
 
 Please note that pty creation is very system-dependend.  I am
 beginning to get an overview, but there are a *lot* of different
@@ -38,4 +37,4 @@ in one swoop.
 See the ChangeLog and the docs for details.
 
 Roland <RGiersig@cpan.org>
-2001-11-19
+2002-01-17

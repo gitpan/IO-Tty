@@ -1,6 +1,4 @@
 # Documentation at the __END__
-# Based on original Ptty package by Nick Ing-Simmons
-# heavily remodeled after the Tcl/Expect pty creation by Don Libes
 
 package IO::Pty;
 
@@ -16,175 +14,123 @@ $VERSION = $IO::Tty::VERSION;
 
 @ISA = qw(IO::Handle);
 
-eval { require IO::Stty };
-push @ISA, "IO::Stty" if (not $@);  # if IO::Stty is installed
-
 sub new {
-    my ($class) = $_[0] || "IO::Pty";
-    $class = ref($class) if ref($class);
-    @_ <= 1 or croak 'usage: new $class';
+  my ($class) = $_[0] || "IO::Pty";
+  $class = ref($class) if ref($class);
+  @_ <= 1 or croak 'usage: new $class';
 
-    my ($ptyfd, $ttyfd, $ttyname) = allocate_pty();
+  my ($ptyfd, $ttyfd, $ttyname) = pty_allocate();
 
-    croak "cannot open a pty" if not defined $ptyfd;
+  croak "Cannot open a pty" if not defined $ptyfd;
 
-    my $pty = $class->SUPER::new_from_fd($ptyfd, "r+");
-    $pty->autoflush(1);
-    my $slave = $class->SUPER::new_from_fd($ttyfd, "r+");
-    $slave->autoflush(1);
-    ${*$pty}{'io_pty_slave'} = $slave;
-    ${*$pty}{'io_pty_ttyname'} = $ttyname;
+  my $pty = $class->SUPER::new_from_fd($ptyfd, "r+");
+  croak "Cannot create a new $class from fd $ptyfd: $!" if not $pty;
+  $pty->autoflush(1);
+  bless $pty => $class;
 
-    bless $pty => $class;
-}
+  my $slave = IO::Tty->new_from_fd($ttyfd, "r+");
+  croak "Cannot create a new IO::Tty from fd $ttyfd: $!" if not $slave;
+  $slave->autoflush(1);
 
-sub slave {
-    @_ == 1 or croak 'usage: $pty->slave();';
+  ${*$pty}{'io_pty_slave'} = $slave;
+  ${*$pty}{'io_pty_ttyname'} = $ttyname;
+  ${*$slave}{'io_tty_ttyname'} = $ttyname;
 
-    my $master = shift;
-    if (exists ${*$master}{'io_pty_slave'}) {
-      return ${*$master}{'io_pty_slave'};
-    }
-
-    my $tty = ${*$master}{'io_pty_ttyname'};
-
-    my $slave = new IO::Tty;
-
-    $slave->open($tty, O_RDWR) ||
-	croak "Cannot open slave $tty: $!";
-
-    ${*$slave}{'io_pty_ttyname'} = $tty;
-    ${*$master}{'io_pty_slave'} = $slave;
-    $slave->autoflush(1);
-    return $slave;
+  return $pty;
 }
 
 sub ttyname {
-    my $pty = shift;
-    ${*$pty}{'io_pty_ttyname'};
+  @_ == 1 or croak 'usage: $pty->ttyname();';
+  my $pty = shift;
+  ${*$pty}{'io_pty_ttyname'};
 }
 
-sub slave_pid {
-    my $pty = shift;
-    ${*$pty}{'io_pty_slave_pid'};
-}
 
-sub spawn {
-  my ($self, @cmd) = @_;
+sub close_slave {
+  @_ == 1 or croak 'usage: $pty->close_slave();';
 
-  $self = $self->new
-    unless $self and ref($self);
+  my $master = shift;
 
-  # set up pipes to sync with child
-  pipe(PARENT_RDR, CHILD_WTR) or die "Cannot open pipe: $!";
-  pipe(CHILD_RDR, PARENT_WTR) or die "Cannot open pipe: $!";
-  pipe(STAT_RDR, STAT_WTR) or die "Cannot open pipe: $!";
-  CHILD_WTR->autoflush(1);
-  PARENT_WTR->autoflush(1);
-  STAT_WTR->autoflush(1);
-
-  my $pid = fork;
-
-  unless (defined ($pid)) {
-    warn "Cannot fork: $!" if $^W;
-    return undef;
-  }
-
-  if($pid) {
-    # parent
-    my $errno;
-    ${*$self}{io_pty_slave_pid} = $pid;
-    close PARENT_RDR; close PARENT_WTR; close STAT_WTR;
-
-    # close slave if it has been opened via ->slave
-    if (exists ${*$self}{'io_pty_slave'}) {
-      close  ${*$self}{'io_pty_slave'};
-      delete ${*$self}{'io_pty_slave'};
-    }
-
-    # wait for child to init slave pty
-    my $errstatus = sysread(CHILD_RDR, $errno, 1);
-    die "Cannot sync with child: $!" if not defined $errstatus;
-    warn "Sync returned EOF" if not $errstatus and $^W;
-    # let child go ahead with exec
-    print CHILD_WTR "\n";
-    close CHILD_RDR; close CHILD_WTR;
-
-    # now wait for child exec (eof due to close-on-exit) or exec error
-    $errstatus = sysread(STAT_RDR, $errno, 256);
-    die "Cannot sync with child: $!" if not defined $errstatus;
-    close STAT_RDR;
-    if ($errstatus) {
-      $! = $errno+0;
-      warn "Cannot exec(@cmd): $!\n" if $^W;
-      return undef;
-    }
-    return $self;
-  }
-  else {
-    # child
-    close CHILD_RDR; close CHILD_WTR; close STAT_RDR;
-
-    # loose controlling terminal explicitely
-    if (defined TIOCNOTTY) {
-      if (open (DEVTTY, "/dev/tty")) {
-	ioctl( DEVTTY, TIOCNOTTY, 0 );
-	close DEVTTY;
-      }
-    }
-
-    # Create a new 'session', lose controlling terminal.
-    if (not POSIX::setsid()) {
-      warn "setsid() failed, strange behavior may result: $!\r\n" if $^W;
-    }
-
-    # now open slave, this should set it as controlling tty on some systems
-    my $ttyname = ${*$self}{'io_pty_ttyname'};
-    my $slv = new IO::Tty;
-    $slv->open($ttyname, O_RDWR)
-      or croak "Cannot open slave $ttyname: $!";
-    $slv->autoflush(1);
-
-    # close slave if it has been opened via ->slave
-    close(${*$self}{'io_pty_slave'}) if ${*$self}{'io_pty_slave'};
-
-    # Acquire a controlling terminal if this doesn't happen automatically
-    if (defined TIOCSCTTY) {
-      if (not defined ioctl( $slv, TIOCSCTTY, 0 )) {
-	warn "warning: TIOCSCTTY failed, child might not have a controlling terminal: $!" if $^W;
-      }
-    } elsif (defined TCSETCTTY) {
-      if (not defined ioctl( $slv, TCSETCTTY, 0 )) {
-	warn "warning: TCSETCTTY failed, child might not have a controlling terminal: $!" if $^W;
-      }
-    }
-
-    {
-      my $dummy;
-      # tell parent we are done with init
-      print PARENT_WTR "\n";
-      # wait for parent to ack
-      die "Cannot sync with parent: $!"
-	if sysread(PARENT_RDR, $dummy, 1) != 1;
-      close PARENT_RDR; close PARENT_WTR;
-    }
-
-    close($self);
-    close(STDIN);
-    open(STDIN,"<&". $slv->fileno())
-      or die "Couldn't reopen STDIN for reading, $!\n";
-    close(STDOUT);
-    open(STDOUT,">&". $slv->fileno())
-      or die "Couldn't reopen STDOUT for writing, $!\n";
-    open(STDERR,">&". $slv->fileno())
-      or die "Couldn't reopen STDERR for writing, $!\n";
-    close($slv);
-
-    { exec(@cmd) };
-    print STAT_WTR $!+0;
-    die "Cannot exec(@cmd): $!";
+  if (exists ${*$master}{'io_pty_slave'}) {
+    close ${*$master}{'io_pty_slave'};
+    delete ${*$master}{'io_pty_slave'};
   }
 }
+
+sub slave {
+  @_ == 1 or croak 'usage: $pty->slave();';
+
+  my $master = shift;
+
+  if (exists ${*$master}{'io_pty_slave'}) {
+    return ${*$master}{'io_pty_slave'};
+  }
+
+  my $tty = $master->ttyname();
+
+  my $slave = new IO::Tty;
+
+  $slave->open($tty, O_RDWR | O_NOCTTY) ||
+    croak "Cannot open slave $tty: $!";
+
+  return $slave;
+}
+
+sub make_slave_controlling_terminal {
+  @_ == 1 or croak 'usage: $pty->make_slave_controlling_terminal();';
+
+  my $self = shift;
+
+  # loose controlling terminal explicitely
+  if (defined TIOCNOTTY) {
+    if (open (DEVTTY, "/dev/tty")) {
+      ioctl( DEVTTY, TIOCNOTTY, 0 );
+      close DEVTTY;
+    }
+  }
+
+  # Create a new 'session', lose controlling terminal.
+  if (not POSIX::setsid()) {
+    warn "setsid() failed, strange behavior may result: $!\r\n" if $^W;
+  }
+
+  if (open(DEVTTY, "/dev/tty")) {
+    warn "Could not disconnect from controlling terminal?!\n" if $^W;
+    close DEVTTY;
+  }
+
+  # now open slave, this should set it as controlling tty on some systems
+  my $ttyname = ${*$self}{'io_pty_ttyname'};
+  my $slv = new IO::Tty;
+  $slv->open($ttyname, O_RDWR)
+    or croak "Cannot open slave $ttyname: $!";
+
+  if (not exists ${*$self}{'io_pty_slave'}) {
+    ${*$self}{'io_pty_slave'} = $slv;
+  } else {
+    $slv->close;
+  }
+
+  # Acquire a controlling terminal if this doesn't happen automatically
+  if (defined TIOCSCTTY) {
+    if (not defined ioctl( ${*$self}{'io_pty_slave'}, TIOCSCTTY, 0 )) {
+      warn "warning: TIOCSCTTY failed, slave might not be set as controlling terminal: $!" if $^W;
+    }
+  } elsif (defined TCSETCTTY) {
+    if (not defined ioctl( ${*$self}{'io_pty_slave'}, TCSETCTTY, 0 )) {
+      warn "warning: TCSETCTTY failed, slave might not be set as controlling terminal: $!" if $^W;
+    }
+  }
+
+  if (not open(DEVTTY, "/dev/tty")) {
+    croak "Could not connect pty as controlling terminal!\n";
+  } else {
+    close DEVTTY;
+  }
+  
+  return 1;
+}
+
 
 1;
 
@@ -196,7 +142,7 @@ IO::Pty - Pseudo TTY object class
 
 =head1 VERSION
 
-0.92_04 beta
+0.94_01 BETA
 
 =head1 SYNOPSIS
 
@@ -213,14 +159,6 @@ IO::Pty - Pseudo TTY object class
     }
 
     close($slave);
-
-    # spawn a program
-    $cmd = IO::Pty->spawn($command, @args)
-      or die "Cannot spawn $command: $!\n";
-
-    print $cmd "command\n";
-    $response = <$cmd>;
-    kill TERM => $cmd->slave_pid;
 
 
 =head1 DESCRIPTION
@@ -249,44 +187,37 @@ object which is the master side of the pseudo tty.
 
 =over 4
 
-=item slave
-
-The C<slave> method will return a new C<IO::Pty> object which
-represents the slave side of the pseudo tty.  If IO::Stty is
-installed, you can call $slave->stty() to modify the terminal
-settings.
-
 =item ttyname
 
-Returns the name of the pseudo tty. On UNIX machines this will be
-the pathname of the device.
+Returns the name of the slave pseudo tty. On UNIX machines this will
+be the pathname of the device.  Use this name for informational
+purpose only, to get a slave filehandle, use slave().
 
-=item spawn
+=item slave
 
-Spawns the given command via exec() (see there for semantics) and
-attaches its stdin/out/err to the slave side of the pty.  Returns the
-master pty upon success or undef upon failure; $! will contain the
-error of the failed exec().
+The C<slave> method will return the slave filehandle of the given
+master pty, opening it anew if necessary.  If IO::Stty is installed,
+you can then call $slave->stty() to modify the terminal settings.
 
-spawn() autovivifies a pty if called without an object, i.e.
+=item close_slave
 
-  spawn IO::Pty (@command);
+The slave filehandle will be closed and destroyed.  This is necessary
+in the parent after forking to get rid of the open filehandle,
+otherwise the parent will not notice if the child exits.
 
-or
+=item make_slave_controlling_terminal
 
-  IO::Pty->spawn(@command);
-
-
-=item slave_pid
-
-Returns the PID of the spawned process (if any).
+This will set the slave filehandle as the controlling terminal of the
+current process, which will become a session leader, so this should
+only be called by a child process after a fork(), e.g. in the callback
+to sync_exec() (see L<Proc::SyncExec>).
 
 =back
 
 
 =head1 SEE ALSO
 
-L<IO::Tty>, L<IO::Handle>, L<Expect>
+L<IO::Tty>, L<IO::Handle>, L<Expect>, L<Proc::SyncExec>
 
 
 =head1 MAILING LISTS
@@ -308,9 +239,6 @@ Ptty module by Nick Ing-Simmons E<lt>F<nik@tiuk.ti.com>E<gt>.
 
 Now maintained and heavily rewritten by Roland Giersig
 E<lt>F<RGiersig@cpan.org>E<gt>.
-
-The spawn() code was modeled after its Tcl/Expect counterpart by Don
-Libes <libes@nist.gov>.
 
 Contains copyrighted stuff from openssh v3.0p1, authored by 
 Tatu Ylonen <ylo@cs.hut.fi>, Markus Friedl and Todd C. Miller

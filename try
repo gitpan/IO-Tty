@@ -7,20 +7,56 @@ $^W = 1;
 $pty = new IO::Pty;
 
 unless (@ARGV) {
-  my $slave  = $pty->slave;
-  print %{*$pty},"\n";
-  print "master $pty $$pty ",$pty->ttyname,"\n";
-  print "slave  $slave $$slave ",$slave->ttyname,"\n";
+  { 
+    my $slave  = $pty->slave;
+    print %{*$pty},"\n";
+    print "master $pty $$pty ",$pty->ttyname,"\n";
+    print "slave  $slave $$slave ",$slave->ttyname,"\n";
 
-  foreach $val (1..10) {
-    print $pty "$val\n";
-    $_ = <$slave>;
-    print "$_";
+    foreach $val (1..10) {
+      print $pty "$val\n";
+      $_ = <$slave>;
+      print "$_";
+    }
   }
-  close($slave);
+  close $pty;
+  print "Done.\n";
+  exit 0;
 } else {
-  $pty->spawn(@ARGV)
-    or die "Cannot spawn @ARGV: $!";
+  pipe(STAT_RDR, STAT_WTR)
+    or die "Cannot open pipe: $!";
+  STAT_WTR->autoflush(1);
+  my $pid = fork();
+  die "Cannot fork" if not defined $pid;
+  unless ($pid) {
+    close STAT_RDR;
+    $pty->make_slave_controlling_terminal();
+    my $slave = $pty->slave();
+    close $pty;
+
+    open(STDIN,"<&". $slave->fileno())
+      or die "Couldn't reopen STDIN for reading, $!\n";
+    open(STDOUT,">&". $slave->fileno())
+      or die "Couldn't reopen STDOUT for writing, $!\n";
+    open(STDERR,">&". $slave->fileno())
+      or die "Couldn't reopen STDERR for writing, $!\n";
+
+    close $slave;
+
+    { exec(@ARGV) };
+    print STAT_WTR $!+0;
+    die "Cannot exec(@ARGV): $!";
+  }
+  close STAT_WTR;
+  $pty->close_slave();
+  # now wait for child exec (eof due to close-on-exit) or exec error
+  my $errstatus = sysread(STAT_RDR, $errno, 256);
+  die "Cannot sync with child: $!" if not defined $errstatus;
+  close STAT_RDR;
+  if ($errstatus) {
+    $! = $errno+0;
+    die "Cannot exec(@ARGV): $!";
+  }
   parent($pty);
 }
 
@@ -36,7 +72,7 @@ sub process
   }
  else
   {
-   print STDERR "Nothing for $src i.e. $read\n";
+#   print STDERR "Nothing for $src i.e. $read\n";
    vec($rin, fileno($src), 1) = 0;
   }
  return $rin;
