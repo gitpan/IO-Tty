@@ -196,7 +196,7 @@ IO::Pty - Pseudo TTY object class
 
 =head1 VERSION
 
-0.92_03 beta
+0.92_04 beta
 
 =head1 SYNOPSIS
 

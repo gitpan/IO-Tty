@@ -8,25 +8,27 @@ $|=1; # to see output immediately
 # Now some poking around in /dev to see what we can find
 #
 
-my @define;
+my %define;
 my @libs;
 
-push @define, qw(-DHAVE_CYGWIN -DHAVE_DEV_PTMX)
+print "Now let's see what we can find out about your system...\n";
+
+@define{qw(-DHAVE_CYGWIN -DHAVE_DEV_PTMX)} = (1, 1)
   if ($^O =~ m/cygwin/i);
 
-push @define, '-DHAVE_DEV_PTMX'
+$define{'-DHAVE_DEV_PTMX'} = 1
   if (-c '/dev/ptmx');
 
-push @define, '-DHAVE_DEV_PTYM_CLONE'
+$define{'-DHAVE_DEV_PTYM_CLONE'} = 1
   if (-c '/dev/ptym/clone');
 
-push @define, '-DHAVE_DEV_PTC'
+$define{'-DHAVE_DEV_PTC'} = 1
   if (-c "/dev/ptc");
 
-push @define, '-DHAVE_DEV_PTMX_BSD'
+$define{'-DHAVE_DEV_PTMX_BSD'} = 1
   if (-c "/dev/ptmx_bsd");
 
-push @define, '-DHAVE_DEV_PTYM'
+$define{'-DHAVE_DEV_PTYM'} = 1
   if (-d "/dev/ptym" and -d "/dev/pty");
 
 # config tests go to a separate dir
@@ -109,7 +111,7 @@ ESQ
   if (system("$Config{'cc'} $Config{'cppflags'} $funcs{$f} conftest.c >/dev/null 2>&1")) {
     print "not found.\n";
   } else {
-    push(@define, "-DHAVE_\U$f");
+    $define{"-DHAVE_\U$f"} = 1;
     push @libs, $funcs{$f} if $funcs{$f};
     print "found.\n";
   }
@@ -133,7 +135,7 @@ ESQ
   }
   else {
     $h =~ s/\W/_/g;
-    push(@define, "-DHAVE_\U$h");
+    $define{"-DHAVE_\U$h"} = 1;
     print "found.\n";
   }
 }
@@ -142,7 +144,7 @@ chdir($dir) or die "chdir: $!";
 
 open(SUB,">xssubs.c") or die "open: $!";
 
-print SUB qq{sv_setpv(config, "@define");\n};
+print SUB qq{sv_setpv(config, "@{[sort keys %define]}");\n};
 
 foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
 	    B230400 B2400 B300 B307200 B38400 B460800 B4800 B50 B57600
@@ -199,12 +201,34 @@ if ($] >= 5.00503) {
   );
 }
 
-print "DEFINE = @define\n";
+my $all_ok = 1;
+foreach my $check
+  (
+   {
+    defines => qw"-DHAVE_TTYNAME -DHAVE_PTSNAME",
+    msg => "UH OH! Neither ttyname() nor ptsname() could be found, expect problems.\n",
+   },
+   {
+    defines => qw"-DHAVE_DEV_PTMX -DHAVE_DEV_PTYM_CLONE -DHAVE_DEV_PTC -DHAVE_DEV_PTMX_BSD -DHAVE__GETPTY -DHAVE_OPENPTY -DHAVE_GETPT",
+    msg => "No high-level lib or clone device has been found, we will use BSD-style ptys.\n",
+   },
+  ) {
+  foreach my $x (@define{@{$check->{defines}}}) {
+    if (not $x) {
+      print $check->{msg};
+      $all_ok = 0;
+    }
+  }
+}
+
+print "Configuration looks good.\n" if $all_ok;
+
+print "DEFINE = @{[sort keys %define]}\n";
 
 WriteMakefile(
     'NAME'	    => 'IO::Tty',
     'VERSION_FROM'  => "Tty.pm",
-    'DEFINE'	    => join(" ", @define),
+    'DEFINE'	    => join(" ", keys %define),
     'LIBS'          => join(" ", @libs),
     'clean'	    => {'FILES' => 'xssubs.c conf'},
     'MAP_TARGET'    => 'perltty',

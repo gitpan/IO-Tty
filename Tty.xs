@@ -639,7 +639,7 @@ BOOT:
     SV *config;
 
     stash = gv_stashpv("IO::Tty::Constant", TRUE);
-    config = get_sv("IO::Tty::CONFIG", TRUE);    
+    config = perl_get_sv("IO::Tty::CONFIG", TRUE);    
 #include "xssubs.c"
  }
 
