@@ -1,3 +1,13 @@
+2002-01-23   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.pm: v0.94_03
+
+	* test.pl: changed test to probe for maximum chunk the pty can
+	handle; also, the /dev/tty test probes if an EOF is correctly
+	reported from the child to the parent.
+
+	* Tty.xs: finally made debug printfs optional via $IO::Tty::DEBUG.
+
 2002-01-18   Roland Giersig  <rgiersig@cpan.org>
 
 	* Tty.pm: v0.94_02

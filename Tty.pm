@@ -10,9 +10,9 @@ use IO::File;
 
 require DynaLoader;
 
-use vars qw(@ISA $VERSION $XS_VERSION);
+use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = $XS_VERSION = "0.94_02";
+$VERSION = $XS_VERSION = "0.94_03";
 @ISA = qw(IO::Handle);
 
 eval { require IO::Stty };
@@ -97,7 +97,7 @@ IO::Tty - Low-level allocate a pseudo-Tty
 
 =head1 VERSION
 
-0.94_02 BETA
+0.94_03 BETA
 
 =head1 SYNOPSIS
 
@@ -139,11 +139,26 @@ passes) with comments about "features":
 
 =over 4
 
-=item * Linux 2.2.x & 2.4.0 (Redhat 6.2 & 7.0, Suse 7.x)
+=item * Linux 2.2.x & 2.4.x
+
+Returns EIO instead of EOF when the slave is closed.  Benign.
 
 =item * AIX 4.3
 
-=item * FreeBSD 4.3
+Returns EIO instead of EOF when the slave is closed.  Benign.
+
+=item * FreeBSD 4.4
+
+=item * Solaris 8
+
+Has the "feature" of returning EOF just once?!
+
+=back
+
+The following systems have not been verified yet for this version, but
+a previous version worked on them:
+
+=over 4
 
 =item * OpenBSD 2.8
 
@@ -159,7 +174,7 @@ so a parent process might not notice that the child went away.
 
 =item * OSF 4.0
 
-=item * Solaris 2.6 & 8
+=item * Solaris 2.6
 
 =item * Windows NT/2k (under Cygwin)
 

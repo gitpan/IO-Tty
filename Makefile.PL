@@ -78,7 +78,7 @@ my %funcs = (ttyname   => "",
 	     ptsname_r => "",
 	    );
 
-foreach my $f (keys %funcs) {
+foreach my $f (sort keys %funcs) {
   open(TST,">conftest.c") or die "open: $!";
   print TST <<"ESQ";
 /* System header to define __stub macros and hopefully few prototypes,
@@ -129,9 +129,9 @@ ESQ
 
 # find various headerfiles
 
-@headers = qw(libutil.h util.h pty.h sys/stropts.h termio.h);
+@headers = qw(libutil.h util.h pty.h sys/stropts.h termio.h termios.h);
 
-foreach my $h (@headers) {
+foreach my $h (sort @headers) {
   open(TST,">headtest.c") or die "open: $!";
   print TST <<"ESQ";
 #include <sys/types.h>
@@ -177,20 +177,22 @@ foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200
 	    TCSANOW TCSBRK TCSETA TCSETAF TCSETAW TCSETCTTY TCSETS TCSETSF
 	    TCSETSW TCXONC TERM_D40 TERM_D42 TERM_H45 TERM_NONE
 	    TERM_TEC TERM_TEX TERM_V10 TERM_V61 TIOCCBRK TIOCCDTR
-	    TIOCCONS TIOCEXCL TIOCFLUSH TIOCGETC TIOCGETD TIOCGETP
-	    TIOCGLTC TIOCGPGRP TIOCGSID TIOCGSOFTCAR TIOCGWINSZ
+	    TIOCCONS TIOCEXCL TIOCFLUSH TIOCGETD 
+	    TIOCGPGRP TIOCGSID TIOCGSOFTCAR TIOCGWINSZ
 	    TIOCHPCL TIOCKBOF TIOCKBON TIOCLBIC TIOCLBIS TIOCLGET
 	    TIOCLSET TIOCMBIC TIOCMBIS TIOCMGET TIOCMSET TIOCM_CAR
 	    TIOCM_CD TIOCM_CTS TIOCM_DSR TIOCM_DTR TIOCM_LE TIOCM_RI
 	    TIOCM_RNG TIOCM_RTS TIOCM_SR TIOCM_ST TIOCNOTTY TIOCNXCL
-	    TIOCOUTQ TIOCREMOTE TIOCSBRK TIOCSCTTY TIOCSDTR TIOCSETC
-	    TIOCSETD TIOCSETN TIOCSETP TIOCSIGNAL TIOCSLTC TIOCSPGRP
+	    TIOCOUTQ TIOCREMOTE TIOCSBRK TIOCSCTTY TIOCSDTR
+	    TIOCSETD TIOCSIGNAL TIOCSPGRP
 	    TIOCSSID TIOCSSOFTCAR TIOCSTART TIOCSTI TIOCSTOP
 	    TIOCSWINSZ TM_ANL TM_CECHO TM_CINVIS TM_LCF TM_NONE TM_SET
 	    TM_SNL TOSTOP VCEOF VCEOL VDISCARD VDSUSP VEOF VEOL VEOL2
 	    VERASE VINTR VKILL VLNEXT VMIN VQUIT VREPRINT VSTART VSTOP
 	    VSUSP VSWTCH VT0 VT1 VTDLY VTIME VWERASE WRAP XCASE XCLUDE
-	    XMT1EN XTABS)) {
+	    XMT1EN XTABS),
+#	 qw(TIOCGETC TIOCGETP TIOCGLTC TIOCSETC TIOCSETN TIOCSETP TIOCSLTC ),
+	) {
 
   print SUB <<"EDQ";
 #ifdef $_
@@ -234,23 +236,18 @@ tell me, <RGiersig@cpan.org> about it (including full output of
 **********************************************************************
 __EOT__
 
-my @ppd;
-
-if ($] >= 5.00503) {
-  @ppd = (
-    AUTHOR    => 'Graham Barr <gbarr@pobox.com>, Roland Giersig <RGiersig@cpan.org',
-    ABSTRACT  => 'Pseudo tty\'s and constants'
-  );
-}
 
 WriteMakefile(
     'NAME'	    => 'IO::Tty',
     'VERSION_FROM'  => 'Tty.pm',
-    'DEFINE'	    => join(" ", keys %define),
+    'DEFINE'	    => join(" ", sort keys %define),
     'LIBS'          => join(" ", @libs),
     'clean'	    => {'FILES' => 'xssubs.c conf'},
     'MAP_TARGET'    => 'perltty',
-    @ppd,
+    ($] >= 5.00503) ?
+    ( AUTHOR    => 'Roland Giersig <RGiersig@cpan.org>, Graham Barr <GBarr@cpan.org>',
+      ABSTRACT  => 'Pseudo ttys and constants' ) :
+    (),
 );
 
 sub MY::postamble {

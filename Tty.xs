@@ -4,6 +4,10 @@
 
 #define PTY_DEBUG 1
 
+#ifdef PTY_DEBUG
+static int print_debug;
+#endif
+
 #ifdef PerlIO
 typedef int SysRet;
 typedef PerlIO * InOutStream;
@@ -113,6 +117,10 @@ newCONSTSUB(stash,name,sv)
 
 #ifdef HAVE_TERMIO_H
 #include <termio.h>
+#endif
+
+#ifdef HAVE_TERMIOS_H
+#include <termios.h>
 #endif
 
 #ifndef O_NOCTTY
@@ -266,7 +274,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	old_signal = mysignal(SIGCHLD, SIG_DFL);
 #if defined(HAVE_GRANTPT)
 #if PTY_DEBUG
-	fprintf(stderr, "trying grantpt()...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying grantpt()...\n");
 #endif
 	if (grantpt(*ptyfd) < 0) {
 	    if (PL_dowarn)
@@ -275,7 +284,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #endif /* HAVE_GRANTPT */
 #if defined(HAVE_UNLOCKPT)
 #if PTY_DEBUG
-	fprintf(stderr, "trying unlockpt()...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying unlockpt()...\n");
 #endif
 	if (unlockpt(*ptyfd) < 0) {
 	    if (PL_dowarn)
@@ -294,7 +304,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #if defined (HAVE_PTSNAME_R)
     if (namebuf[0] == 0) {
 #if PTY_DEBUG
-	fprintf(stderr, "trying ptsname_r()...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying ptsname_r()...\n");
 #endif
 	if(ptsname_r(*ptyfd, namebuf, namebuflen)) {
 	    if (PL_dowarn)
@@ -307,7 +318,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
     if (namebuf[0] == 0) {
 	char * name;
 #if PTY_DEBUG
-	fprintf(stderr, "trying ptsname()...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying ptsname()...\n");
 #endif
 	name = ptsname(*ptyfd);
 	if (name) {
@@ -330,7 +342,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
      * Open the slave side.
      */
 #if PTY_DEBUG
-    fprintf(stderr, "trying to open %s...\n", namebuf);
+    if (print_debug)
+      fprintf(stderr, "trying to open %s...\n", namebuf);
 #endif
 
     *ttyfd = open(namebuf, O_RDWR | O_NOCTTY);
@@ -350,7 +363,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
      * those platforms we know these are required.
      */
 #if PTY_DEBUG
-    fprintf(stderr, "trying to I_PUSH ptem...\n");
+    if (print_debug)
+      fprintf(stderr, "trying to I_PUSH ptem...\n");
 #endif
     if (ioctl(*ttyfd, I_PUSH, "ptem") < 0)
 #if defined (__solaris) || defined(__hpux)
@@ -360,7 +374,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	      ;
 
 #if PTY_DEBUG
-    fprintf(stderr, "trying to I_PUSH ldterm...\n");
+    if (print_debug)
+      fprintf(stderr, "trying to I_PUSH ldterm...\n");
 #endif
     if (ioctl(*ttyfd, I_PUSH, "ldterm") < 0)
 #if defined (__solaris) || defined(__hpux)
@@ -370,7 +385,8 @@ open_slave(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	      ;
 
 #if PTY_DEBUG
-    fprintf(stderr, "trying to I_PUSH ttcompat...\n");
+    if (print_debug)
+      fprintf(stderr, "trying to I_PUSH ttcompat...\n");
 #endif
     if (ioctl(*ttyfd, I_PUSH, "ttcompat") < 0)
 #if defined (__solaris)
@@ -412,7 +428,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    mysig_t old_signal;
 
 #if PTY_DEBUG
-	    fprintf(stderr, "trying _getpty()...\n");
+	    if (print_debug)
+	      fprintf(stderr, "trying _getpty()...\n");
 #endif
 	    /* _getpty spawns a suid prog, so don't ignore SIGCHLD */
     	    old_signal = mysignal(SIGCHLD, SIG_DFL);
@@ -439,7 +456,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 
 #if defined(HAVE_DEV_PTMX)
 #if PTY_DEBUG
-	fprintf(stderr, "trying /dev/ptmx...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying /dev/ptmx...\n");
 #endif
 
 	*ptyfd = open("/dev/ptmx", O_RDWR | O_NOCTTY);
@@ -451,7 +469,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 
 #if defined(HAVE_DEV_PTYM_CLONE)
 #if PTY_DEBUG
-	fprintf(stderr, "trying /dev/ptym/clone...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying /dev/ptym/clone...\n");
 #endif
 
 	*ptyfd = open("/dev/ptym/clone", O_RDWR | O_NOCTTY);
@@ -464,7 +483,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #if defined(HAVE_DEV_PTC)
 	/* AIX-style pty code. */
 #if PTY_DEBUG
-	fprintf(stderr, "trying /dev/ptc...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying /dev/ptc...\n");
 #endif
 
 	*ptyfd = open("/dev/ptc", O_RDWR | O_NOCTTY);
@@ -476,7 +496,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 
 #if defined(HAVE_DEV_PTMX_BSD)
 #if PTY_DEBUG
-	fprintf(stderr, "trying /dev/ptmx_bsd...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying /dev/ptmx_bsd...\n");
 #endif
 	*ptyfd = open("/dev/ptmx_bsd", O_RDWR | O_NOCTTY);
 	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
@@ -495,7 +516,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    char name[PATH_MAX+1];
 
 #if PTY_DEBUG
-	    fprintf(stderr, "trying openpty()...\n");
+	    if (print_debug)
+	      fprintf(stderr, "trying openpty()...\n");
 #endif
 	    old_signal = mysignal(SIGCHLD, SIG_DFL);
 	    ret = openpty(ptyfd, ttyfd, name, NULL, NULL);
@@ -515,7 +537,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 #if defined(HAVE_GETPT)
 	/* glibc defines this */
 #if PTY_DEBUG
-	fprintf(stderr, "trying getpt()...\n");
+	if (print_debug)
+	  fprintf(stderr, "trying getpt()...\n");
 #endif
 	*ptyfd = getpt();
 	if (*ptyfd >= 0 && open_slave(ptyfd, ttyfd, namebuf, namebuflen))
@@ -543,7 +566,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    highpty = 128;
 #endif
 #if PTY_DEBUG
-	    fprintf(stderr, "trying CRAY /dev/pty/???...\n");
+	    if (print_debug)
+	      fprintf(stderr, "trying CRAY /dev/pty/???...\n");
 #endif
 	    for (i = 0; i < highpty; i++) {
 		snprintf(buf, sizeof(buf), "/dev/pty/%03d", i);
@@ -570,7 +594,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    int num_ptys = strlen(ptymajors) * num_minors;
 	    
 #if PTY_DEBUG
-	    fprintf(stderr, "trying HPUX /dev/ptym/pty[a-ce-z][0-9a-f]...\n");
+	    if (print_debug)
+	      fprintf(stderr, "trying HPUX /dev/ptym/pty[a-ce-z][0-9a-f]...\n");
 #endif
 	    /* try /dev/ptym/pty[a-ce-z][0-9a-f] */
 	    for (i = 0; i < num_ptys; i++) {
@@ -591,7 +616,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 		break;
 
 #if PTY_DEBUG
-	    fprintf(stderr, "trying HPUX /dev/ptym/pty[a-ce-z][0-9][0-9]...\n");
+	    if (print_debug)
+	      fprintf(stderr, "trying HPUX /dev/ptym/pty[a-ce-z][0-9][0-9]...\n");
 #endif
 	    /* now try /dev/ptym/pty[a-ce-z][0-9][0-9] */
 	    num_minors = 100;
@@ -625,7 +651,8 @@ allocate_pty(int *ptyfd, int *ttyfd, char *namebuf, int namebuflen)
 	    int num_ptys = strlen(ptymajors) * num_minors;
 
 #if PTY_DEBUG
-	    fprintf(stderr, "trying BSD /dev/pty??...\n");
+	    if (print_debug)
+	      fprintf(stderr, "trying BSD /dev/pty??...\n");
 #endif
 	    for (i = 0; i < num_ptys; i++) {
 		snprintf(buf, sizeof buf, "/dev/pty%c%c",
@@ -668,8 +695,16 @@ pty_allocate()
     INIT:
 	int ptyfd, ttyfd, ret;
 	char name[256];
+#ifdef PTY_DEBUG
+        SV *debug;
+#endif
 
     PPCODE:
+#ifdef PTY_DEBUG
+        debug = perl_get_sv("IO::Tty::DEBUG", FALSE);
+  	if (SvTRUE(debug))
+          print_debug = 1;
+#endif
 	ret = allocate_pty(&ptyfd, &ttyfd, name, sizeof(name));
 	if (ret) {
 	    name[sizeof(name)-1] = 0;
@@ -696,17 +731,8 @@ InOutStream handle
 	    errno = EINVAL;
 	}
 #else
-#ifdef HAVE_PTSNAME
-	if (handle)
-	    RETVAL = ptsname(PerlIO_fileno(handle));
-	else {
-	    RETVAL = Nullch;
-	    errno = EINVAL;
-	}
-#else
 	warn("IO::Tty::ttyname not implemented on this architecture");
 	RETVAL = Nullch;
-#endif
 #endif
     OUTPUT:
 	RETVAL
@@ -716,7 +742,7 @@ BOOT:
 {
   HV *stash;
   SV *config;
-  
+
   stash = gv_stashpv("IO::Tty::Constant", TRUE);
   config = perl_get_sv("IO::Tty::CONFIG", TRUE);    
 #include "xssubs.c"

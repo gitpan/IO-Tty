@@ -31,8 +31,8 @@ If it's working on your system, please send me a short note with
 details (version number, distribution, etc. 'uname -a' is a good
 start) so I can get an overview.  Thanks!
 
-Note that the cygwin ptys have problems when you feed them too much
-in one swoop.
+Note that the cygwin ptys (and maybe others) have problems when you
+feed them too much in one swoop.
 
 See the ChangeLog and the docs for details.
 
