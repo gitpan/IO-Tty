@@ -4,28 +4,65 @@ To build this distribution run
 
   perl Makefile.PL
   make
+  make test
   make install
 
-There is no make test for this distribution as it is hard to automate.
-But they is a script included calle try.
+There is finally a 'make test' for this distribution!!
+For manual tests there is still a script included called 'try'.
 
 If try is run with arguments it will run then as a command with the
 output connected via a pseudo tty, eg
 
    perl -Mblib try ls
 
-If run without arguments it should output something like
+This module was developed by Graham Barr <gbarr@pobox.com>
+and is now maintained by Roland Giersig <RGiersig@cpan.org>.
 
-io_pty_ttyname/dev/ttya0
-master IO::Pty=GLOB(0x81a8d40) *Symbol::GEN0 /dev/ttya0
-slave  IO::Tty=GLOB(0x81a4d34) *Symbol::GEN1 /dev/ttya0
-1
-2
-3
-4
-5
-6
-7
-8
-9
-10           
+GREAT NEWS!!  It now works on Windows under Cygwin
+(http://source.redhat.com/cygwin) !!  For all those interested: Cygwin
+provides /dev/ptmx semantics, but there is no actual file called
+'/dev/ptmx'.  Still, when someone opens it, Cygwin emulates the Right
+Thing (tm).  Deep Magic!
+
+It should finally work with HPUX 11.0 and FreeBSD, but I cannot do any
+in-depth testing, so please provide feedback.
+
+Please note that pty creation is very system-dependend.  If you have
+problems on your system, please send me (<RGiersig@cpan.org>) the output 
+of a manual installation ('perl Makefile.PL; make; make test;') and 
+I'll see what I can deduce from it.
+
+Supported systems include Linux, Solaris, AIX, OSF, *BSD, HP-UX and
+finally Windows (under the Cygwin environment, see
+http://source.redhat.com/cygwin).  See the IO::Tty manpage for a list.
+If it's working on your system, please send me a short note with
+details (version number, distribution, etc. 'uname -a' is a good
+start) so I can get an overview.  Thanks!
+
+As this module is mainly used by Expect, support for it is available 
+via the two Expect mailing lists, expectperl-announce and
+expectperl-discuss, at
+
+  http://lists.sourceforge.net/lists/listinfo/expectperl-announce
+
+and
+
+  http://lists.sourceforge.net/lists/listinfo/expectperl-discuss
+
+
+Thanks to (in no particular order)
+
+Mark Montague <markmont@umich.edu> 
+Olaf Flebbe <o.flebbe@science-computing.de>
+Nick Scott <Nick.Scott@veritect.com>
+Theo Petersen <theo@acsp.com> 
+Rocco Caputo <troc@netrus.net>
+Dave Smith <dave.smith@candata.org>
+Bob Showalter <Bob_Showalter@taylorwhite.com>
+
+who helped fixing bugs on various platforms.
+
+See the ChangeLog for details.
+
+Roland <RGiersig@cpan.org>
+2001-08-16

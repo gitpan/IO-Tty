@@ -1,7 +1,6 @@
 #
 # TODO:
 #  probably should export ioctl constants
-#  pod
 #
 
 package IO::Tty;
@@ -13,7 +12,7 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION);
 
-$VERSION = $XS_VERSION = "0.04";
+$VERSION = $XS_VERSION = "0.05";
 @ISA = qw(IO::Handle);
 
 BOOT_XS: {
@@ -33,7 +32,7 @@ BOOT_XS: {
 sub import {
     my $this = shift;
     local $Exporter::ExportLevel = 1;
-    
+
     import IO::Tty::Constant @_;
 }
 
@@ -91,3 +90,106 @@ require Exporter;
 );
 
 1;
+
+__END__
+
+=head1 NAME
+
+IO::Tty - Low-level allocate a pseudo-Tty
+
+=head1 VERSION
+
+0.05
+
+=head1 SYNOPSIS
+
+    use IO::Tty;
+    ...
+    # don't use, see IO::Pty for a better way to create ptys.
+
+=head1 DESCRIPTION
+
+C<IO::Tty> is used internally by C<IO::Pty> to create a pseudo-tty.
+You wouldn't want to use it directly, use C<IO::Pty>.
+
+Windows is now supported (under the Cygwin environment, see
+http://source.redhat.com/cygwin).
+
+Please note that pty creation is very system-dependend.  From my
+experience, any modern POSIX system should be fine.  Find below a
+list of systems that IO::Tty should work on.
+
+If you have problems on your system and your system is listed in the
+"verified" list, you probably have some non-standard setup, e.g. you
+compiled your Linux-kernel yourself and disabled ptys (bummer!).
+Please ask your friendly sysadmin for help.
+
+If your system is not listed, unpack the latest version of IO::Tty, do
+a C<'perl Makefile.PL; make; make test; uname -a'> and send me
+(F<RGiersig@cpan.org>) the results and I'll see what I can deduce from
+that.
+
+If it's working on your system, please send me a short note with
+details (version number, distribution, etc. C<'uname -a'> is a good
+start) so I can get an overview.  Thanks!
+
+
+=head1 VERIFIED SYSTEMS
+
+This is a list of systems that IO::Tty seems to work on ('make test' passes):
+
+=over 3
+
+=item * Linux 2.2.x & 2.4.0 (Redhat 6.2 & 7.0, Suse 7.1 & 7.2)
+
+=item * AIX 4.3
+
+=item * FreeBSD 4.3
+
+=item * OpenBSD 2.8 sparc
+
+=item * SCO Unix v??
+
+=item * OSF 4.0
+
+=item * Solaris 2.6 & 8
+
+=item * Windows NT/2k (under Cygwin)
+
+=back
+
+If you have additions to this list, please mail them to
+E<lt>F<RGiersig@cpan.org>E<gt>.
+
+=head1 SEE ALSO
+
+L<IO::Pty>
+
+=head1 MAILING LISTS
+
+As this module is mainly used by Expect, support for it is available
+via the two Expect mailing lists, expectperl-announce and
+expectperl-discuss, at
+
+  http://lists.sourceforge.net/lists/listinfo/expectperl-announce
+
+and
+
+  http://lists.sourceforge.net/lists/listinfo/expectperl-discuss
+
+
+=head1 AUTHORS
+
+Graham Barr E<lt>F<gbarr@pobox.com>E<gt> (retired)
+
+Now maintained by Roland Giersig E<lt>F<RGiersig@cpan.org>E<gt>
+
+=head1 COPYRIGHT
+
+The C code used in the XS file is covered by the GNU GENERAL
+PUBLIC LICENSE, See COPYING.
+
+All other code is free software; you can redistribute it and/or modify
+it under the same terms as Perl itself.
+
+=cut

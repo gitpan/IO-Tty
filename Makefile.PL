@@ -13,14 +13,15 @@ use IO::File;
 #
 
 my @define;
+my @libs;
 
-if (-c '/dev/ptmx' && -d '/dev/pts')
+if (-c '/dev/ptmx' && (-d '/dev/pts' or glob('/dev/pts*')))
 {
-    push(@define, '-DHAVE_DEV_PTMX');
+    push(@define, '-DHAS_DEV_PTMX');
 }
 else
 {
-    push(@define, '-DHAVE_DEV_PTC')
+    push(@define, '-DHAS_DEV_PTC')
 	     if (-e "/dev/ptc");
 
     $pdir = (-d "/dev/ptym") ? "/dev/ptym" : "/dev";
@@ -51,25 +52,112 @@ unless( mkdir 'conf', 0777 ) {
 use Cwd qw(getcwd);
 my $dir = getcwd;
 chdir('conf') or die "chdir: $!";
-open(TST,">tst.c") or die "open: $!";
+
+open(TST,">compilerok.c") or die "open: $!";
 print TST <<'ESQ';
-extern char *ttyname(int);
+int main () { return 0; }
+ESQ
+close(TST);
+$|=1;
+if( system(split(/\s+/, $Config{'cc'}),
+	   split(' ',$Config{'cppflags'}),
+	   'compilerok.c')) {
+  print <<"EDQ";
+
+ERROR: cannot run the configured compiler $Config{'cc'}
+
+EDQ
+}
+
+open(TST,">ttyname.c") or die "open: $!";
+print TST <<'ESQ';
+#include <unistd.h>
 int main () { (void)ttyname(0); return 0; }
 ESQ
 close(TST);
 $|=1;
-print "Looking for ttyname()....";
-if( system(split(/\s+/, $Config{'cc'}), split(' ',$Config{'cppflags'}),'tst.c')) {
+print "Looking for ttyname()... ";
+if( system("$Config{'cc'} $Config{'cppflags'} ttyname.c > /dev/null 2>&1")) {
   print <<EDQ;
 
-I cannot seem to find ttyname() on your system
+
+Uh oh, I cannot seem to find ttyname() on your system!!
 
 EDQ
 }
 else {
  push(@define, '-DHAS_TTYNAME');
- print "Found\n";
+ print "found.\n";
 }
+
+# libutil.h
+open(TST,">libutilh.c") or die "open: $!";
+print TST <<'ESQ';
+#include <sys/types.h>
+#include <libutil.h>
+int main () { return 0; }
+ESQ
+close(TST);
+print "Looking for libutil.h... ";
+if(system("$Config{'cc'} $Config{'cppflags'} libutilh.c > /dev/null 2>&1")) {
+  print "not found.\n"
+}
+else {
+  push(@define, '-DHAS_LIBUTIL_H');
+  print "found.\n";
+}
+
+# util.h
+open(TST,">utilh.c") or die "open: $!";
+print TST <<'ESQ';
+#include <sys/types.h>
+#include <util.h>
+int main () { return 0; }
+ESQ
+close(TST);
+print "Looking for util.h... ";
+if(system("$Config{'cc'} $Config{'cppflags'} utilh.c > /dev/null 2>&1")) {
+  print "not found.\n"
+}
+else {
+  push(@define, '-DHAS_UTIL_H');
+  print "found.\n";
+}
+
+# pty.h
+open(TST,">ptyh.c") or die "open: $!";
+print TST <<'ESQ';
+#include <sys/types.h>
+#include <pty.h>
+int main () { return 0; }
+ESQ
+close(TST);
+print "Looking for pty.h... ";
+if(system("$Config{'cc'} $Config{'cppflags'} ptyh.c > /dev/null 2>&1")) {
+  print "not found.\n"
+}
+else {
+  push(@define, '-DHAS_PTY_H');
+  print "found.\n";
+}
+
+# openpty
+open(TST,">openpty.c") or die "open: $!";
+print TST <<'ESQ';
+extern int openpty(int*, int*, char*, void*, void*);
+int main () { (void)openpty(0,0,0,0,0); return 0; }
+ESQ
+close(TST);
+print "Looking for openpty()... ";
+if(system("$Config{'cc'} $Config{'cppflags'} -lutil openpty.c > /dev/null 2>&1")) {
+  print "not found.\n"
+}
+else {
+  push @define, '-DHAS_OPENPTY';
+  push @libs, '-lutil';
+  print "found.\n";
+}
+
 
 chdir($dir) or die "chdir: $!";
 
@@ -97,8 +185,8 @@ foreach (qw(B0 B110 B115200 B1200 B134 B150 B153600 B1800 B19200 B200 B230400
 	    TIOCKBON TIOCLBIC TIOCLBIS TIOCLGET TIOCLSET TIOCMBIC TIOCMBIS
 	    TIOCMGET TIOCMSET TIOCM_CAR TIOCM_CD TIOCM_CTS TIOCM_DSR TIOCM_DTR
 	    TIOCM_LE TIOCM_RI TIOCM_RNG TIOCM_RTS TIOCM_SR TIOCM_ST TIOCNOTTY
-	    TIOCNXCL TIOCOUTQ TIOCREMOTE TIOCSBRK TIOCSDTR TIOCSETC TIOCSETD
-	    TIOCSETN TIOCSETP TIOCSIGNAL TIOCSLTC TIOCSPGRP TIOCSSID
+	    TIOCNXCL TIOCOUTQ TIOCREMOTE TIOCSBRK TIOCSCTTY TIOCSDTR TIOCSETC
+	    TIOCSETD TIOCSETN TIOCSETP TIOCSIGNAL TIOCSLTC TIOCSPGRP TIOCSSID
 	    TIOCSSOFTCAR TIOCSTART TIOCSTI TIOCSTOP TIOCSWINSZ TM_ANL TM_CECHO
 	    TM_CINVIS TM_LCF TM_NONE TM_SET TM_SNL TOSTOP VCEOF VCEOL VDISCARD
 	    VDSUSP VEOF VEOL VEOL2 VERASE VINTR VKILL VLNEXT VMIN VQUIT
@@ -119,15 +207,18 @@ my @ppd;
 
 if ($] >= 5.00503) {
   @ppd = (
-    AUTHOR    => 'Graham Barr <gbarr@pobox.com>',
+    AUTHOR    => 'Graham Barr <gbarr@pobox.com>, Roland Giersig <RGiersig@cpan.org',
     ABSTRACT  => 'Pseudo tty\'s and constants'
   );
 }
 
+print "DEFINE = @define\n";
+
 WriteMakefile(
     'NAME'	    => 'IO::Tty',
     'VERSION_FROM'  => "Tty.pm",
-    'DEFINE'	    => join(" ", @define), 
+    'DEFINE'	    => join(" ", @define),
+    'LIBS'          => join(" ", @libs),
     'clean'	    => {'FILES' => 'xssubs.c conf'},
     'MAP_TARGET'    => 'perltty',
     @ppd,

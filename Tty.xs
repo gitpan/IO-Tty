@@ -100,7 +100,7 @@ newCONSTSUB(stash,name,sv)
 # include <unistd.h>
 #endif
 
-#if !defined(SVR4) && (defined(__svr4__) || defined(_PowerMAXOS))
+#if !defined(SVR4) && (defined(__svr4__) || defined(_PowerMAXOS) || defined(__SVR4) || defined(__SVR4__) || defined(__hpux)) 
 # define SVR4
 #endif
 
@@ -142,6 +142,12 @@ extern int errno;
 # ifdef _HPUX_SOURCE
 #  include <sys/modem.h>
 # endif /* hpux */
+
+# ifdef __osf__ 
+/* needed for TCGETA etc Macros: does a sizeof(struct termio) */ 
+# include <termio.h> 
+# endif /* __osf__ */ 
+
 # ifdef hpux
 #  include <bsdtty.h>
 # endif /* hpux */
@@ -228,15 +234,11 @@ extern int errno;
  *    signal handling
  */
 
-#ifdef VOIDSIG
-# define SIGRETURN
-# define sigret_t void
-#else
-# define SIGRETURN return 0;
-# define sigret_t int
+/* Geeeee, reverse it? */
+#if defined(POSIX)
+# define VOIDSIG
 #endif
 
-/* Geeeee, reverse it? */
 #if defined(SVR4) 			|| \
    (defined(SYSV) && defined(ISC)) 	|| \
     defined(_AIX) 			|| \
@@ -247,6 +249,14 @@ extern int errno;
     defined(POSIX) 			|| \
     defined(NeXT)
 # define SIGHASARG
+#endif
+
+#if defined(VOIDSIG) || defined(_AIX)  
+# define SIGRETURN
+# define sigret_t void
+#else
+# define SIGRETURN return 0;
+# define sigret_t int
 #endif
 
 #ifdef SIGHASARG
@@ -294,6 +304,20 @@ extern int errno;
 # include <sys/stropts.h>
 #endif
 
+#if defined(HAS_LIBUTIL_H)
+#include <sys/types.h>
+#include <libutil.h>		/* openpty() on FreeBSD */
+#else
+#if defined(HAS_UTIL_H)
+#include <sys/types.h>
+#include <util.h>		/* openpty() on NetBSD */
+#else
+#if defined(HAS_PTY_H)
+#include <pty.h>		/* openpty() on Linux */
+#endif
+#endif
+#endif
+
 /*
  * if no PTYRANGE[01] is in the config file, we pick a default
  */
@@ -325,6 +349,25 @@ initpty(f)
 int f;
 {
 #ifdef POSIX
+
+  struct termios attr;
+
+#if 0
+  /* raw mode */
+  if (tcgetattr(f, &attr))
+	perror ("tcgetattr");
+
+  attr.c_iflag = 0;
+  attr.c_oflag = 0;
+  attr.c_lflag = 0;
+
+  attr.c_cc[VMIN] = 1;
+  attr.c_cc[VTIME] = 0;
+
+  if (tcsetattr(f, TCSANOW, &attr))
+	perror ("tcsetattr");
+#endif
+
   tcflush(f, TCIOFLUSH);
 #else
 # ifdef TIOCFLUSH
@@ -386,10 +429,13 @@ SV *ttyn;
 {
   register int f;
   char TtyName[32];
-  if ((f = open_controlling_pty(TtyName)) < 0)
+  if ((f = open_controlling_pty(TtyName)) < 0) {
+    sv_setpv(errmsg, "cannot open_controlling_pty()");
     return -1;
+  }
   initpty(f);
   sv_setpv(ttyn,TtyName);
+  sv_setpv(errmsg, "");
   return f;
 }
 #endif
@@ -399,16 +445,18 @@ SV *ttyn;
 #if (defined(sequent) || defined(_SEQUENT_)) && !defined(PTY_DONE)
 #define PTY_DONE
 int
-OpenPTY(ttyn)
-SV *ttyn;
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
 {
   char *m, *s;
   register int f;
   char PtyName[32], TtyName[32];
 
 
-  if ((f = getpseudotty(&s, &m)) < 0)
+  if ((f = getpseudotty(&s, &m)) < 0) {
+    sv_setpv(errmsg, "cannot getpseudotty()");
     return -1;
+  }
 #ifdef _SEQUENT_
   fvhangup(s);
 #endif
@@ -416,6 +464,7 @@ SV *ttyn;
   strncpy(TtyName, s, sizeof(TtyName));
   initpty(f);
   sv_setpv(ttyn,TtyName);
+  sv_setpv(errmsg, "");
   return f;
 }
 #endif
@@ -425,8 +474,8 @@ SV *ttyn;
 #if defined(__sgi) && !defined(PTY_DONE)
 #define PTY_DONE
 int
-OpenPTY(ttyn)
-SV *ttyn;
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
 {
   int f;
   char *name; 
@@ -440,57 +489,71 @@ SV *ttyn;
   name = _getpty(&f, O_RDWR | O_NONBLOCK, 0600, 0);
   signal(SIGCHLD, sigcld);
 
-  if (name == 0)
+  if (name == 0) {
+    sv_setpv(errmsg, "cannot getpty");
     return -1;
+  }
   initpty(f);
   sv_setpv(ttyn,name);
+  sv_setpv(errmsg, "");
   return f;
 }
 #endif
 
 /***************************************************************/
 
-#if defined(MIPS) && defined(HAVE_DEV_PTC) && !defined(PTY_DONE)
+#if defined(MIPS) && defined(HAS_DEV_PTC) && !defined(PTY_DONE)
 #define PTY_DONE
 int
-OpenPTY(ttyn)
-SV *ttyn;
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
 {
   register int f;
   struct stat buf;
   char PtyName[32], TtyName[32];
    
   strcpy(PtyName, "/dev/ptc");
-  if ((f = open(PtyName, O_RDWR | O_NONBLOCK)) < 0)
+  if ((f = open(PtyName, O_RDWR | O_NONBLOCK)) < 0) {
+    sv_setpv(errmsg, "cannot open /dev/ptc");
     return -1;
+  }
   if (fstat(f, &buf) < 0)
     {
       close(f);
+      sv_setpv(errmsg, "cannot fstat");
       return -1;
     }
   sprintf(TtyName, "/dev/ttyq%d", minor(buf.st_rdev));
   initpty(f);
-  sv_setpv(ttyn,TtyName);
+  sv_setpv(ttyn, TtyName);
+  sv_setpv(errmsg, "");
   return f;
 }
 #endif
 
 /***************************************************************/
+/* Cygwin doesn't have a file called '/dev/ptmx', but when opened
+** with this name emulates the right thing.  Magic in action...
+*/
 
-#if defined(HAVE_DEV_PTMX) && !defined(PTY_DONE)
+#if (defined(HAS_DEV_PTMX) || defined(__CYGWIN__)) && !defined(PTY_DONE)
 #define PTY_DONE
+
 int
-OpenPTY(ttyn)
-SV *ttyn;
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
 {
   register int f;
-  char *m, *ptsname();
+  char *m;
+  char *ptsname _((int));
   int unlockpt _((int)), grantpt _((int));
   sigret_t (*sigcld)_(SIGPROTOARG);
   char TtyName[32];
 
-  if ((f = open("/dev/ptmx", O_RDWR)) == -1)
+  if ((f = open("/dev/ptmx", O_RDWR)) == -1) {
+    sv_setpv(errmsg, "cannot open /dev/ptmx");
     return -1;
+  }
 
   /*
    * SIGCHLD set to SIG_DFL for grantpt() because it fork()s and
@@ -501,19 +564,22 @@ SV *ttyn;
     {
       signal(SIGCHLD, sigcld);
       close(f);
+      sv_setpv(errmsg, "cannot grantpt()");
       return -1;
     } 
   signal(SIGCHLD, sigcld);
+
   strncpy(TtyName, m, sizeof(TtyName));
   initpty(f);
   sv_setpv(ttyn,TtyName);
+  sv_setpv(errmsg, "");
   return f;
 }
 #endif
 
 /***************************************************************/
 
-#if defined(_AIX) && defined(HAVE_DEV_PTC) && !defined(PTY_DONE)
+#if defined(_AIX) && defined(HAS_DEV_PTC) && !defined(PTY_DONE)
 #define PTY_DONE
 
 #ifdef _IBMR2
@@ -521,34 +587,66 @@ int aixhack = -1;
 #endif
 
 int
-OpenPTY(ttyn)
-SV *ttyn;
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
 {
   register int f;
   char PtyName[32], TtyName[32];
 
   /* a dumb looking loop replaced by mycrofts code: */
   strcpy (PtyName, "/dev/ptc");
-  if ((f = open (PtyName, O_RDWR)) < 0)
+  if ((f = open (PtyName, O_RDWR)) < 0) {
+    sv_setpv(errmsg, "cannot open /dev/ptc");
     return -1;
+  }
   strncpy(TtyName, ttyname(f), sizeof(TtyName));
   if (eff_uid && access(TtyName, R_OK | W_OK))
     {
       close(f);
+      sv_setpv(errmsg, "invalid access()");
       return -1;
     }
   initpty(f);
+
 # ifdef _IBMR2
   if (aixhack >= 0)
     close(aixhack);
   if ((aixhack = open(TtyName, O_RDWR | O_NOCTTY)) < 0)
     {
       close(f);
+      sv_setpv(errmsg, "cannot open ttyname()");
       return -1;
     }
 # endif
+
   sv_setpv(ttyn,TtyName);
+  sv_setpv(errmsg, "");
   return f;
+}
+#endif
+
+/***************************************************************/
+
+#if defined(HAS_OPENPTY) && !defined(PTY_DONE)
+#define PTY_DONE
+int
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
+{
+  int f, err, dummy; 
+  char TtyName[32];
+
+  err = openpty(&f, &dummy, TtyName, NULL, NULL); 
+  if (err) {
+    sv_setpv(errmsg, "cannot openpty()");
+    return -1; 
+  }
+  close(dummy);
+
+  initpty(f); 
+  sv_setpv(ttyn, TtyName); 
+  sv_setpv(errmsg, "");
+  return f; 
 }
 #endif
 
@@ -556,8 +654,8 @@ SV *ttyn;
 
 #ifndef PTY_DONE
 int
-OpenPTY(ttyn)
-SV *ttyn;
+OpenPTY(ttyn, errmsg)
+SV *ttyn, *errmsg;
 {
   register char *p, *q, *l, *d;
   register int f;
@@ -599,9 +697,11 @@ SV *ttyn;
 #endif
 	  initpty(f);
 	  sv_setpv(ttyn,TtyName);
+          sv_setpv(errmsg, "");
 	  return f;
 	}
     }
+  sv_setpv(errmsg, "cannot find an unused pty");
   return -1;
 }
 #endif
@@ -618,8 +718,10 @@ char *ttyn;
   croak("Cannot I_PUSH ptem %s %s", ttyn, strerror(errno));
  if (ioctl(fd, I_PUSH, "ldterm"))
   croak("Cannot I_PUSH ldterm %s %s", ttyn, strerror(errno));
+#if !defined(__hpux)
  if (ioctl(fd, I_PUSH, "ttcompat"))
   croak("Cannot I_PUSH ttcompat %s %s", ttyn, strerror(errno));
+#endif
 #endif
  return 1;
 }
@@ -629,8 +731,9 @@ MODULE = IO::Tty	PACKAGE = IO::Pty
 PROTOTYPES: DISABLE
 
 int
-OpenPTY(ttyn)
+OpenPTY(ttyn, errmsg)
 SV *	ttyn
+SV *    errmsg
 
 MODULE = IO::Tty	PACKAGE = IO::Tty	PREFIX=TTY
 
@@ -674,3 +777,4 @@ BOOT:
     export_fail = GvAVn(gv);    
 #include "xssubs.c"
  }
+

@@ -1,3 +1,28 @@
+2001-07-16  Roland Giersig  <rgiersig@cpan.org>
+
+	* test.pl: finally some tests!  Spawns a perl mini-script that
+	  echoes back all characters from STDIN, but inverted.
+
+	* Pty.pm (slave): slave now is set to be a controlling tty if possible;
+	  it also remembers it's name now.
+
+	* Makefile.PL: 
+	  - on SCO, the slave pts* are in the /dev dir, not /dev/pts
+	  - added test for libutil.h, util.h, pty.h and openpty()
+	  - added symbol TIOCSCTTY
+
+	* Tty.xs:
+	  - some SVR4 only define __SVR4; fixed.
+	  - OSF machines need termio.h for various macros
+	  - AIX doesn't define VOIDSIG; fixed.
+	  - Cygwin can use /dev/ptmx even though that file doesn't exist.
+	  - added openpty() version for FreeBSD and others that have 
+	    no good method for creating ptys; untested.
+
+	* Tty.pm:
+	  - moved docu over from Pty.pm to lessen confusion Pty <-> Tty
+	  - added verified systems list
+	
 Change 588 on 2000/09/04 by <gbarr@pobox.com> (Graham Barr)
 
 	Check for /dev/ptmx and /dev/pts instead of testing defined(SVR4)

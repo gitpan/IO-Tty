@@ -9,7 +9,7 @@ use IO::File;
 
 use vars qw(@ISA $VERSION);
 
-$VERSION = "0.01";
+$VERSION = "0.02";
 
 @ISA = qw(IO::Handle);
 
@@ -18,8 +18,11 @@ sub new {
     @_ == 1 or croak 'usage: new $class';
 
     my $pty = $class->SUPER::new;
-    my $tty;
-    my $fd = OpenPTY($tty);
+    my $tty, $errmsg;
+    my $fd = OpenPTY($tty, $errmsg);
+
+    croak "cannot open a pty: $errmsg" if $fd < 0;
+    croak "didn't get a ttyname: $errmsg" unless $tty;
 
     $pty->fdopen($fd, "r+");
 
@@ -39,7 +42,16 @@ sub slave {
     my $slave = new IO::Tty;
 
     $slave->open($tty, O_RDWR) ||
-	croak "Cannot open $dev as $tty:$!";
+	croak "Cannot open $pty as $tty: $!";
+
+    # Acquire a controlling terminal.
+
+    if (defined TIOCSCTTY and not defined CIBAUD) {
+      defined ioctl( $slave, TIOCSCTTY, 0 ) or
+	die "TIOCSCTTY failed: $!";
+    }
+
+    ${*$slave}{'io_pty_ttyname'} = $tty;
 
     return $slave;
 }
@@ -62,12 +74,15 @@ sub spawn {
     }
     elsif(defined($pid)) {
 	# child
-	my $slv = $self->slv;
+	my $slv = $self->slave;
+	close($self);
 	close(STDIN);
 	open(STDIN,"<&". $slv->fileno()) || die "Couldn't reopen STDIN for reading, $!\n";
 	close(STDOUT);
-	open(STDOUT,">&". $slv->fileno()) || die "Couldn't reopen STDIN for reading, $!\n";
+	open(STDOUT,">&". $slv->fileno()) || die "Couldn't reopen STDOUT for writing, $!\n";
+	open(STDERR,">&". $slv->fileno()) || die "Couldn't reopen STDERR for writing, $!\n";
 	exec(@_);
+	die "exec(@_): $!";
     }
     else {
 	undef $self;
@@ -95,8 +110,8 @@ IO::Pty - Pseudo TTY object class
     foreach $val (1..10) {
 	print $pty "$val\n";
 	$_ = <$slave>;
-	print "$_"; 
-    }            
+	print "$_";
+    }
 
     close($slave);
 
@@ -106,6 +121,9 @@ C<IO::Pty> provides an interface to allow the creation of a pseudo tty.
 
 C<IO::Pty> inherits from C<IO::Handle> and so provide all the methods
 defined by the C<IO::Handle> package.
+
+Please note that pty creation is very system-dependend.  If you have
+problems, see L<IO::Tty> for help.
 
 =head1 CONSTRUCTOR
 
@@ -125,7 +143,7 @@ the master side of the pseudo tty.
 =item slave
 
 The C<slave> method will return a new C<IO::Pty> object which
-represents the slave side of the pseudo tty
+represents the slave side of the pseudo tty.
 
 =item ttyname
 
@@ -136,21 +154,36 @@ the pathname of the device.
 
 =head1 SEE ALSO
 
-L<IO::Handle>
+L<IO::Tty>, L<IO::Handle>
 
-=head1 AUTHOR
+=head1 MAILING LISTS
 
-Graham Barr E<lt>F<gbarr@ti.com>E<gt>
+As this module is mainly used by Expect, support for it is available
+via the two Expect mailing lists, expectperl-announce and
+expectperl-discuss, at
+
+  http://lists.sourceforge.net/lists/listinfo/expectperl-announce
+
+and
+
+  http://lists.sourceforge.net/lists/listinfo/expectperl-discuss
+
+=head1 AUTHORS
+
+Graham Barr E<lt>F<gbarr@pobox.com>E<gt>
 
 Based on original Ptty module by Nick Ing-Simmons
 E<lt>F<nik@tiuk.ti.com>E<gt>
 
+Now maintained by Roland Giersig E<lt>F<RGiersig@cpan.org>E<gt>
+
 =head1 COPYRIGHT
 
-Most of the C code used in the XS file is covered by the GNU GENERAL
+The C code used in the XS file is covered by the GNU GENERAL
 PUBLIC LICENSE, See COPYING
 
 All other code is free software; you can redistribute it and/or modify
 it under the same terms as Perl itself.
 
 =cut
+
