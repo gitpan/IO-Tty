@@ -1,4 +1,8 @@
-2002-03-18    <roland@nsisdev>
+2002-04-02   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.pm, Pty.pm: v1.02; disable warning for non-existant die handler
+
+2002-03-18   Roland Giersig  <rgiersig@cpan.org>
 
 	* v1.01
 	

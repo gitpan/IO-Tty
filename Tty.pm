@@ -12,11 +12,11 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = 1.01;
-$XS_VERSION = "1.01";
+$VERSION = 1.02;
+$XS_VERSION = "1.02";
 @ISA = qw(IO::Handle);
 
-eval { undef local $SIG{__DIE__}; local $^W = 0; require IO::Stty };
+eval { local $^W = 0; undef local $SIG{__DIE__}; require IO::Stty };
 push @ISA, "IO::Stty" if (not $@);  # if IO::Stty is installed
 
 BOOT_XS: {
@@ -98,7 +98,7 @@ IO::Tty - Low-level allocate a pseudo-Tty, import constants.
 
 =head1 VERSION
 
-1.00
+1.02
 
 =head1 SYNOPSIS
 
