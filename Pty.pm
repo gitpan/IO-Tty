@@ -10,10 +10,10 @@ require POSIX;
 
 use vars qw(@ISA $VERSION);
 
-$VERSION = 1.00; # keep same as in Tty.pm
+$VERSION = 1.01; # keep same as in Tty.pm
 
 @ISA = qw(IO::Handle);
-eval { require IO::Stty };
+eval { undef local $SIG{__DIE__}; local $^W = 0; require IO::Stty };
 push @ISA, "IO::Stty" if (not $@);  # if IO::Stty is installed
 
 sub new {

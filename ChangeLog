@@ -1,3 +1,11 @@
+2002-03-18    <roland@nsisdev>
+
+	* v1.01
+	
+	* Makefile.PL: remove cpp, test-compile instead
+
+	* Tty.pm, Pty.pm: disable die handler when requiring Stty
+
 2002-03-06  Roland Giersig  <rgiersig@cpan.org>
 
 	* v0.97_04, final pre-release version
