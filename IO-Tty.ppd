@@ -1,4 +1,4 @@
-<SOFTPKG NAME="IO-Tty" VERSION="0,03,0,0">
+<SOFTPKG NAME="IO-Tty" VERSION="0,04,0,0">
 	<TITLE>IO-Tty</TITLE>
 	<ABSTRACT>Pseudo tty's and constants</ABSTRACT>
 	<AUTHOR>Graham Barr &lt;gbarr@pobox.com&gt;</AUTHOR>

@@ -1,3 +1,24 @@
+Change 588 on 2000/09/04 by <gbarr@pobox.com> (Graham Barr)
+
+	Check for /dev/ptmx and /dev/pts instead of testing defined(SVR4)
+
+Change 587 on 2000/09/04 by <gbarr@pobox.com> (Graham Barr)
+
+	Make ttyname just warn when it is not implemented instead of croak
+
+Change 586 on 2000/09/04 by <gbarr@pobox.com> (Graham Barr)
+
+	Include <sys/modem.h> for HPUX
+
+Change 585 on 2000/09/04 by <gbarr@pobox.com> (Graham Barr)
+
+	Makefile.PL
+	- Fix to how cc is called
+
+Change 461 on 2000/03/29 by <gbarr@pobox.com> (Graham Barr)
+
+	Release 0.03
+
 Change 460 on 2000/03/29 by <gbarr@pobox.com> (Graham Barr)
 
 	General cleanup and added PPD stuff into Makefile.PL

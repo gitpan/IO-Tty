@@ -12,12 +12,6 @@ typedef int SysRet;
 typedef FILE * InOutStream;
 #endif
 
-#define NOT_HERE(_s,r) \
-	do { \
-	    croak("%s not implemented on this architecture", _s); \
-	    RETVAL = r; \
-	} while(0)
-
 /*
  * Define an XSUB that returns a constant scalar. The resulting structure is
  * identical to that created by the parser when it parses code like :
@@ -145,6 +139,9 @@ extern int errno;
 
 #ifdef POSIX
 # include <termios.h>
+# ifdef _HPUX_SOURCE
+#  include <sys/modem.h>
+# endif /* hpux */
 # ifdef hpux
 #  include <bsdtty.h>
 # endif /* hpux */
@@ -480,7 +477,7 @@ SV *ttyn;
 
 /***************************************************************/
 
-#if defined(SVR4) && !defined(PTY_DONE)
+#if defined(HAVE_DEV_PTMX) && !defined(PTY_DONE)
 #define PTY_DONE
 int
 OpenPTY(ttyn)
@@ -629,6 +626,8 @@ char *ttyn;
 
 MODULE = IO::Tty	PACKAGE = IO::Pty
 
+PROTOTYPES: DISABLE
+
 int
 OpenPTY(ttyn)
 SV *	ttyn
@@ -652,7 +651,8 @@ ttyname(handle)
 	    errno = EINVAL;
 	}
 #else
-	NOT_HERE("IO::Tty::ttyname", Nullch);
+	warn("IO::Tty::ttyname not implemented on this architecture");
+	RETVAL = Nullch;
 #endif
     OUTPUT:
 	RETVAL

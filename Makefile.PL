@@ -14,26 +14,33 @@ use IO::File;
 
 my @define;
 
-push(@define, '-DHAVE_DEV_PTC')
-	 if (-e "/dev/ptc");
+if (-c '/dev/ptmx' && -d '/dev/pts')
+{
+    push(@define, '-DHAVE_DEV_PTMX');
+}
+else
+{
+    push(@define, '-DHAVE_DEV_PTC')
+	     if (-e "/dev/ptc");
 
-$pdir = (-d "/dev/ptym") ? "/dev/ptym" : "/dev";
-@ptys = <$pdir/pty??>;
-if (@ptys)
- {
-  my %p0 = ();
-  my %p1 = ();
-  foreach (@ptys)
-   {
-    my ($x,$y) = /(.)(.)$/;
-    $p0{$x}++;
-    $p1{$y}++;
-   }
-  push(@define, '-DPTYRANGE0=\\"' . join('',sort(keys %p0)) . '\\"');
-  push(@define, '-DPTYRANGE1=\\"' . join('',sort(keys %p1)) . '\\"');
+    $pdir = (-d "/dev/ptym") ? "/dev/ptym" : "/dev";
+    @ptys = <$pdir/pty??>;
+    if (@ptys)
+     {
+      my %p0 = ();
+      my %p1 = ();
+      foreach (@ptys)
+       {
+	my ($x,$y) = /(.)(.)$/;
+	$p0{$x}++;
+	$p1{$y}++;
+       }
+      push(@define, '-DPTYRANGE0=\\"' . join('',sort(keys %p0)) . '\\"');
+      push(@define, '-DPTYRANGE1=\\"' . join('',sort(keys %p1)) . '\\"');
 
-  push(@define, '-DPTYTEMPLATE=\\"' . "$pdir/ptyXY" . '\\"');
- }
+      push(@define, '-DPTYTEMPLATE=\\"' . "$pdir/ptyXY" . '\\"');
+     }
+}
 
 
 unless( mkdir 'conf', 0777 ) {
@@ -52,7 +59,7 @@ ESQ
 close(TST);
 $|=1;
 print "Looking for ttyname()....";
-if( system($Config{'cc'},'tst.c')) {
+if( system(split(/\s+/, $Config{'cc'}), split(' ',$Config{'cppflags'}),'tst.c')) {
   print <<EDQ;
 
 I cannot seem to find ttyname() on your system
@@ -121,7 +128,7 @@ WriteMakefile(
     'NAME'	    => 'IO::Tty',
     'VERSION_FROM'  => "Tty.pm",
     'DEFINE'	    => join(" ", @define), 
-    'clean'	    => {'FILES' => 'xssubs.c conf *% *.html *.b[ac]k *.old *.orig *.rej a.out *log'},
+    'clean'	    => {'FILES' => 'xssubs.c conf'},
     'MAP_TARGET'    => 'perltty',
     @ppd,
 );

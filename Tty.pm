@@ -13,7 +13,7 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION);
 
-$VERSION = $XS_VERSION = "0.03";
+$VERSION = $XS_VERSION = "0.04";
 @ISA = qw(IO::Handle);
 
 BOOT_XS: {
