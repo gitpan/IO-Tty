@@ -1,0 +1,10 @@
+<SOFTPKG NAME="IO-Tty" VERSION="0,03,0,0">
+	<TITLE>IO-Tty</TITLE>
+	<ABSTRACT>Pseudo tty's and constants</ABSTRACT>
+	<AUTHOR>Graham Barr &lt;gbarr@pobox.com&gt;</AUTHOR>
+	<IMPLEMENTATION>
+		<OS NAME="linux" />
+		<ARCHITECTURE NAME="i586-linux" />
+		<CODEBASE HREF="" />
+	</IMPLEMENTATION>
+</SOFTPKG>

@@ -1,0 +1,11 @@
+Change 460 on 2000/03/29 by <gbarr@pobox.com> (Graham Barr)
+
+	General cleanup and added PPD stuff into Makefile.PL
+
+Change 310 on 1999/05/10 by <gbarr@pobox.com> (Graham Barr)
+
+	- Removed the need for Configure by implementing a test in Makefile.PL
+	- The existance of constants are now checked at import time, so @EXPORT
+	  had to be renamed to @EXPORT_OK. ie noting is imported by default
+
+

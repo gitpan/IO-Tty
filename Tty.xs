@@ -12,13 +12,73 @@ typedef int SysRet;
 typedef FILE * InOutStream;
 #endif
 
-#define NOT_HERE(s,r) \
+#define NOT_HERE(_s,r) \
 	do { \
-	    croak("%s not implemented on this architecture", s); \
+	    croak("%s not implemented on this architecture", _s); \
 	    RETVAL = r; \
 	} while(0)
 
-#include "TTYcfg.h"
+/*
+ * Define an XSUB that returns a constant scalar. The resulting structure is
+ * identical to that created by the parser when it parses code like :
+ *
+ *    sub xyz () { 123 }
+ *
+ * This allows the constants from the XSUB to be inlined.
+ *
+ * !!! THIS SHOULD BE ADDED INTO THE CORE CODE !!!!
+ *
+ */
+
+#include "patchlevel.h"
+
+#if (PATCHLEVEL < 3) || ((PATCHLEVEL == 3) && (SUBVERSION < 22))
+     /* before 5.003_22 */
+#    define MY_start_subparse(fmt,flags) start_subparse()
+#else
+#  if (PATCHLEVEL == 3) && (SUBVERSION == 22)
+     /* 5.003_22 */
+#    define MY_start_subparse(fmt,flags) start_subparse(flags)
+#  else
+     /* 5.003_23  onwards */
+#    define MY_start_subparse(fmt,flags) start_subparse(fmt,flags)
+#  endif
+#endif
+
+#ifndef newCONSTSUB
+static void
+newCONSTSUB(stash,name,sv)
+    HV *stash;
+    char *name;
+    SV *sv;
+{
+#ifdef dTHR
+    dTHR;
+#endif
+    U32 oldhints = hints;
+    HV *old_cop_stash = curcop->cop_stash;
+    HV *old_curstash = curstash;
+    line_t oldline = curcop->cop_line;
+    curcop->cop_line = copline;
+
+    hints &= ~HINT_BLOCK_SCOPE;
+    if(stash)
+	curstash = curcop->cop_stash = stash;
+
+    newSUB(
+	MY_start_subparse(FALSE, 0),
+	newSVOP(OP_CONST, 0, newSVpv(name,0)),
+	newSVOP(OP_CONST, 0, &sv_no),	/* SvPV(&sv_no) == "" -- GMB */
+	newSTATEOP(0, Nullch, newSVOP(OP_CONST, 0, sv))
+    );
+
+    hints = oldhints;
+    curcop->cop_stash = old_cop_stash;
+    curstash = old_curstash;
+    curcop->cop_line = oldline;
+}
+#endif
+
 
 /* Copyright (c) 1993
  *      Juergen Weigert (jnweiger@immd4.informatik.uni-erlangen.de)
@@ -46,7 +106,7 @@ typedef FILE * InOutStream;
 # include <unistd.h>
 #endif
 
-#if !defined(SVR4) && defined(__svr4__)
+#if !defined(SVR4) && (defined(__svr4__) || defined(_PowerMAXOS))
 # define SVR4
 #endif
 
@@ -219,10 +279,6 @@ extern int errno;
 #include <fcntl.h>
 #include <signal.h>
 
-#if !defined(sun) 
-#include <sys/ioctl.h>
-#endif
-
 #if defined(sun) && defined(LOCKPTY) && !defined(TIOCEXCL)
 #include <sys/ttold.h>
 #endif
@@ -338,6 +394,7 @@ SV *ttyn;
   initpty(f);
   sv_setpv(ttyn,TtyName);
   return f;
+}
 #endif
 
 /***************************************************************/
@@ -553,7 +610,7 @@ SV *ttyn;
 #endif
 
 int
-InitSlave(f,ttyn)
+TTY_InitSlave(f,ttyn)
 InOutStream f;
 char *ttyn;
 {
@@ -570,16 +627,16 @@ char *ttyn;
  return 1;
 }
 
-MODULE = IO::Pty	PACKAGE = IO::Pty
+MODULE = IO::Tty	PACKAGE = IO::Pty
 
 int
 OpenPTY(ttyn)
 SV *	ttyn
 
-MODULE = IO::Tty	PACKAGE = IO::Tty
+MODULE = IO::Tty	PACKAGE = IO::Tty	PREFIX=TTY
 
 int
-InitSlave(f,ttyn)
+TTY_InitSlave(f,ttyn)
 InOutStream f
 char *	ttyn
 
@@ -600,7 +657,20 @@ ttyname(handle)
     OUTPUT:
 	RETVAL
 
+
+
+
 BOOT:
  {
-  eff_uid = geteuid();
+    HV *stash;
+    AV *export_fail;
+    GV **gvp,*gv;
+    eff_uid = geteuid();
+    stash = gv_stashpvn("IO::Tty::Constant", 17, TRUE);
+    gvp = (GV**)hv_fetch(stash, "EXPORT_FAIL", 11, TRUE);
+    gv = *gvp;
+    if (SvTYPE(gv) != SVt_PVGV)
+      gv_init(gv, stash, "EXPORT_FAIL", 11, TRUE);
+    export_fail = GvAVn(gv);    
+#include "xssubs.c"
  }

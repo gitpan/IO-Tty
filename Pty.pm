@@ -13,43 +13,67 @@ $VERSION = "0.01";
 
 @ISA = qw(IO::Handle);
 
-sub new
-{
- my $class = $_[0] || "IO::Pty";
- @_ == 1 or croak 'usage: new $class';
+sub new {
+    my $class = $_[0] || "IO::Pty";
+    @_ == 1 or croak 'usage: new $class';
 
- my $pty = $class->SUPER::new;
- my $tty;
- my $fd = OpenPTY($tty);
+    my $pty = $class->SUPER::new;
+    my $tty;
+    my $fd = OpenPTY($tty);
 
- $pty->fdopen($fd, "r+");
+    $pty->fdopen($fd, "r+");
 
- $pty->autoflush;
+    $pty->autoflush;
 
- ${*$pty}{'io_pty_ttyname'} = $tty;
+    ${*$pty}{'io_pty_ttyname'} = $tty;
 
- $pty;
+    $pty;
 }
 
-sub slave
-{
- @_ == 1 or croak 'usage: $pty->slave();';
+sub slave {
+    @_ == 1 or croak 'usage: $pty->slave();';
 
- my $pty = shift;
- my $tty = ${*$pty}{'io_pty_ttyname'};
+    my $pty = shift;
+    my $tty = ${*$pty}{'io_pty_ttyname'};
 
- my $slave = new IO::Tty;
+    my $slave = new IO::Tty;
 
- $slave->open($tty, O_RDWR) ||
+    $slave->open($tty, O_RDWR) ||
 	croak "Cannot open $dev as $tty:$!";
 
- return $slave;
+    return $slave;
 }
 
-sub ttyname
-{
- my $pty = shift;
- ${*$pty}{'io_pty_ttyname'};
+sub ttyname {
+    my $pty = shift;
+    ${*$pty}{'io_pty_ttyname'};
+}
+
+sub spawn {
+    my $self = shift;
+
+    $self = $self->new
+	unless ref($self);
+
+    my $pid = fork;
+
+    if($pid) {
+	# parent
+    }
+    elsif(defined($pid)) {
+	# child
+	my $slv = $self->slv;
+	close(STDIN);
+	open(STDIN,"<&". $slv->fileno()) || die "Couldn't reopen STDIN for reading, $!\n";
+	close(STDOUT);
+	open(STDOUT,">&". $slv->fileno()) || die "Couldn't reopen STDIN for reading, $!\n";
+	exec(@_);
+    }
+    else {
+	undef $self;
+    }
+
+    $self;
 }
 
 1;

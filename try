@@ -40,11 +40,11 @@ else
 sub child
 {
  my ($pty) = @_; 
+ POSIX::setsid();
  my $tty = $pty->slave;
  close($pty);
  print $tty "From the Child\n";
 # setpgrp(0,$$);
- POSIX::setsid();
  open(STDIN, "<&".fileno($tty)) || (sleep(5),die "Cannot open STDIN");
  open(STDOUT,">&".fileno($tty)) || (sleep(5),die "Cannot open STDOUT");
  open(STDERR,">&STDOUT")        || (sleep(5),die "Cannot open STDERR");
