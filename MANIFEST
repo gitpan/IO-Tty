@@ -1,6 +1,4 @@
-COPYING
 ChangeLog
-IO-Tty.ppd
 MANIFEST
 Makefile.PL
 Pty.pm

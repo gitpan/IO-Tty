@@ -1,3 +1,48 @@
+2001-11-17   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.xs (pty_allocate): complete rewrite, based on ideas from
+	openssh and Xemacs.  Tries all ways detected by Makefile.PL in
+	order, so in theory it should work everywhere (modulo system
+	quirks).  First tries the high-level openpty() before getpt(),
+	then various clone devices and finally BSD-style ptys.
+
+	* Tty.xs (open_slave): moved master init stuff here, must be done
+	before opening the slave.  The Stream module pushes are now tried
+	on all systems but only generate warnings on systems that we know
+	need them.
+
+	* Makefile.PL: added tests for all kinds of functions and clone
+	devices.
+	
+2001-11-14   Roland Giersig  <rgiersig@cpan.org>
+
+	* Tty.xs (MODULE): stole creation code from openssh
+
+	* test.pl: added test for controlling terminal
+
+	* Pty.pm (spawn): rearranged setsid() and added a fresh open of
+	the slave pty so the pty becomes the controlling terminal for the
+	process.
+
+2001-10-25   Roland Giersig  <rgiersig@cpan.org>
+
+	* Pty.pm (spawn): copied spawning process from Tcl/Expect (thanks,
+	  Don!); should set the controlling tty so ssh and other password
+	  requesting programs should be OK; also now returns exec errors.
+	  (slave_pid): added method to get at PID of spawned process.
+
+	* Makefile.PL: added TIOCCONS.
+
+	* try: adapted to use spawn().
+
+	* test.pl: adapted to use spawn(); added test for exec errors.
+
+2001-10-16  Roland Giersig  <rgiersig@cpan.org>
+
+	* Pty.pm (new): fixed bad my() line
+
+	* automatically add IO::Stty to ISA if it exists.
+
 2001-07-16  Roland Giersig  <rgiersig@cpan.org>
 
 	* test.pl: finally some tests!  Spawns a perl mini-script that

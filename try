@@ -1,62 +1,27 @@
-#!/usr/local/bin/perl -w
 
 use blib;
 use IO::Pty;
 require POSIX;
-
+$^W = 1;
 
 $pty = new IO::Pty;
 
-unless (@ARGV)
- {
+unless (@ARGV) {
   my $slave  = $pty->slave;
-
   print %{*$pty},"\n";
   print "master $pty $$pty ",$pty->ttyname,"\n";
   print "slave  $slave $$slave ",$slave->ttyname,"\n";
 
-  foreach $val (1..10)
-   {            
+  foreach $val (1..10) {
     print $pty "$val\n";
     $_ = <$slave>;
-    print "$_"; 
-   }            
-  close($slave);
- }
-else
- {
-  my $pid = fork;
-  die "Cannot fork:$!" if ($pid < 0);
-  if ($pid)
-   {
-    parent($pty);
-   }
-  else
-   {
-    child($pty);
-   }
- }
-
-sub child
-{
- my ($pty) = @_; 
- POSIX::setsid();
- my $tty = $pty->slave;
- close($pty);
- print $tty "From the Child\n";
-# setpgrp(0,$$);
- open(STDIN, "<&".fileno($tty)) || (sleep(5),die "Cannot open STDIN");
- open(STDOUT,">&".fileno($tty)) || (sleep(5),die "Cannot open STDOUT");
- open(STDERR,">&STDOUT")        || (sleep(5),die "Cannot open STDERR");
- printf "STDIN=%d STDOUT=%d STDERR=%d\n",fileno(STDIN),fileno(STDOUT),fileno(STDERR);
- close($tty);
- my $prog = shift(@ARGV);
- if (!@ARGV && $prog =~ /sh$/)
-  {
-   exec $prog '-sh'
+    print "$_";
   }
- exec($prog,@ARGV);
- die "Cannot exec"; 
+  close($slave);
+} else {
+  $pty->spawn(@ARGV)
+    or die "Cannot spawn @ARGV: $!";
+  parent($pty);
 }
 
 sub process
@@ -67,7 +32,7 @@ sub process
  if (defined $read && $read)
   {
    syswrite($dst,$buf,$read);
-   syswrite(LOG,$buf,$read); 
+   syswrite(LOG,$buf,$read);
   }
  else
   {
@@ -80,7 +45,7 @@ sub process
 sub parent
 {
  open(LOG,">log") || die;
- my ($pty) = @_; 
+ my ($pty) = @_;
  my $tty = $pty;
  my ($rin,$win,$ein) = ('','','');
  vec($rin, fileno(STDIN), 1) = 1;

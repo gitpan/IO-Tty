@@ -1,8 +1,10 @@
 
 use strict;
+$^W = 1; # enable warnings
 use Test;
 use blib;
 use IO::Pty;
+use IO::Tty qw(TIOCSCTTY TIOCCONS TIOCNOTTY TCSETCTTY);
 
 require POSIX;
 
@@ -11,12 +13,12 @@ my $Perl = $^X;
 my @Strings =
   (
    "ÄÜÖ",
-   "The quick brown fox jumped over the lazy dog.\n",
-   " fakjdf ijj845jtirg8e 4jy8 gfuoyhjgt8h gues9845th guoaeh gt98hae 45t8u ha8rhg ue4ht 8eh tgo8he4 t8 gfj aoingf9a8hgf uain dgkjadshftuehgfusand987vgh afugh 8h 98H 978H 7HG zG 86G (&g (O/g &(GF(/EG F78G F87SG F(/G F(/a sldjkf hajksdhf jkahsd fjkh asdljkhf lakjsdh fkjahs djfk hasjkdh fjklahs dfkjhasdjkf hajksdh fkjah sdjfk hasjkdh fkjashd fjkha sdjkfhehurthuerhtuwe htui eruth\r\n",
+   "The quick brown fox jumps over the lazy dog.\n",
+   " fakjdf ijj845jtirg8e 4jy8 gfuoyhjgt8h gues9845th guoaeh gt98hae 45t8u ha8rhg ue4ht 8eh tgo8he4 t8 gfj aoingf9a8hgf uain dgkjadshftuehgfusand987vgh afugh 8h 98H 978H 7HG zG 86G (&g (O/g &(GF(/EG F78G F87SG F(/G F(/a sli eruth\r\n",
    "\r\r\n\r\b\n\r\0x00\0xFF",
   );
 
-plan tests => @Strings*2;
+plan tests => @Strings*2 + 4;
 
 sub set_raw_pty($) {
   my $ttyno = fileno(shift);
@@ -30,29 +32,51 @@ sub set_raw_pty($) {
   $termios->setattr($ttyno, &POSIX::TCSANOW) or die "setattr: $!";
 }
 
-my $master = new IO::Pty;
-print "isatty(\$master): ", POSIX::isatty($master)? "YES\n": "NO\n";
+print "Checking for appropriate ioctls: ";
+# print "TIOCCONS " if defined TIOCCONS;
+print "TIOCNOTTY " if defined TIOCNOTTY;
+print "TIOCSCTTY " if defined TIOCSCTTY;
+print "TCSETCTTY " if defined TCSETCTTY;
+print "\n";
 
-eval { set_raw_pty($master); };
-warn "warning: set_raw_pty(\$master): $@\n" if $@;
+# first check if we can detect a spawn error
+{
+  $! = 0;
+  $SIG{ALRM} = sub { ok(0); die "Timeout"; };
+  alarm(10);
+  my $pty = IO::Pty->spawn("unknown_program_test_IGNORE_THIS_ERROR_ahat44535jtrbni43uh5");
+  alarm(0);
+  ok(not defined $pty);
+  ok($!);
+}
 
-my $slave = $master->slave();
-print "isatty(\$slave): ", POSIX::isatty($slave)? "YES\n": "NO\n";
+# now for the echoback tests
+{
+  my $master = new IO::Pty;
+  print "isatty(\$master): ", POSIX::isatty($master)? "YES\n": "NO\n";
 
-eval { set_raw_pty($slave); };
-warn "warning: set_raw_pty(\$slave): $@\n" if $@;
+  if (POSIX::isatty($master)) {
+    eval { set_raw_pty($master); };
+    warn "warning: set_raw_pty(\$master): $@\n" if $@;
+  }
 
-$SIG{ALRM} = sub { die "Timeout"; };
+  my $slave = $master->slave();
+  print "isatty(\$slave): ", POSIX::isatty($slave)? "YES\n": "NO\n";
 
-my $pid = fork;
-die "Cannot fork: $!" if ($pid < 0);
+  if (POSIX::isatty($slave)) {
+    eval { set_raw_pty($slave); };
+    warn "warning: set_raw_pty(\$slave): $@\n" if $@;
+  }
 
-if ($pid) {
-  close($slave);
+  $master->spawn($Perl, "-e", 'while(1){sysread(STDIN,$c,1);syswrite(STDOUT,~$c,1)}')
+    or die "Cannot spawn test program";
+
   # parent sends down some strings and expects to get them back inverted
   foreach my $s (@Strings) {
-    my ($ret, $buf);
+    my $buf;
+    my $ret = "";
     syswrite($master, $s, length($s));
+    $SIG{ALRM} = sub { ok(0); die "Timeout"; };
     alarm(20);
     while (length($ret) < length($s)) {
       sysread($master, $buf, length($s))
@@ -63,15 +87,30 @@ if ($pid) {
     ok(length($s), length($ret));
     ok($ret, ~$s);
   }
-  kill TERM => $pid;
-} else {
-  # child negates all characters sent down
-  POSIX::setsid();
-  close($master);
-  open(STDIN, "<&".fileno($slave)) || die "Cannot open STDIN: $!";
-  open(STDOUT,">&".fileno($slave)) || die "Cannot open STDOUT: $!";
-  open(STDERR,">&STDOUT")        || die "Cannot open STDERR: $!";
-  close($slave);
-  exec($Perl, "-e", 'while(1){sysread(STDIN,$c,1);syswrite(STDOUT,~$c,1)}');
-  die "Cannot exec $Perl: $!";
+  kill TERM => $master->slave_pid;
 }
+
+# test if child gets pty as controlling terminal
+{
+  my $child = IO::Pty->spawn ($Perl . q{ -MIO::Handle -e 'open(TTY, "+>/dev/tty") or die "no controlling terminal"; autoflush TTY 1; print TTY "gimme on /dev/tty: "; $s = <TTY>; chomp $s; print "back on STDOUT: \U$s\n"; close TTY; close STDOUT; close STDERR; exit 0;'}) # })
+    or die "Cannot spawn $Perl: $!\n";
+
+  my ($s, $chunk);
+  $SIG{ALRM} = sub { ok(0); die "Timeout ($s)"; };
+  alarm(10);
+
+  sysread($child, $s, 100) or die "sysread() failed: $!";
+  ok($s =~ m/gimme.*:/);
+
+  print $child "seems OK!\n";
+
+  # collect all responses
+  while (sysread($child, $chunk, 100)) {
+    $s .= $chunk;
+  }
+  print $s;
+  ok($s =~ m/back on STDOUT: SEEMS OK!/);
+  alarm(0);
+}
+
+
