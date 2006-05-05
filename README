@@ -7,36 +7,28 @@ To build this distribution, run
   make test
   make install
 
-ALL BRAND NEW!!
+This (v1.03) is a small bugfix-release. I fixed an issue with 
+newCONSTSUB, so the IO::Tty::Constants now work as designed: 
+they all exist but are undef if not implemented on your system, 
+so you can wrap ioctl with an 'if (defined CONSTANT)'. This
+means that warnings about bad ioctl should be gone.
 
-I finally took the time to give the pty-allocation part a complete
-overhaul.  Thanks to openssh and Xemacs teams for providing me with a
-lot of inspiration through their own pty-allocation codes.
+I was not able to check this fix on perl versions older than 
+5.8 so there might be issues with them. 
 
-I also removed the spawn code, as this doesn't fit thematically in
-here.  Look into 'try' or 'test.pl' to see how it is done by hand.
-Problems with ackquiring a controlling terminal should also be fixed
-and propagating terminal size changes is now supported.  Please read
-the manpages, there is a lot of new stuff (e.g. IO::Tty::Constant).
-
-Please note that pty creation is very system-dependend.  I am
-beginning to get an overview, but there are a *lot* of different
-systems out there.  If you have problems on your system, please send
-me (<RGiersig@cpan.org>) the output of a manual installation ('perl
-Makefile.PL; make; make test;') and I'll see what I can deduce from
-it.
+Please note that pty creation is very system-dependend, and there 
+are a *lot* of different systems out there.  If you have problems 
+on your system, please send me (<RGiersig@cpan.org>) the output 
+of a manual installation ('perl Makefile.PL; make; make test;') 
+and I'll see what I can deduce from it.
 
 Supported systems include Linux, Solaris, AIX, OSF, *BSD, IRIX, HP-UX
 and finally Windows (under the Cygwin environment, see
-http://sources.redhat.com/cygwin/).  See the IO::Tty manpage for a
-detailed list.  I also compiled an overview table, find it in the
-project pages document manager at SourceForge
-(http://sourceforge.net/projects/expectperl/).
+http://www.cygwin.com/).  See the IO::Tty manpage for a
+detailed list.  
 
-Sorry, ActiveState Perl is not supported, basically because there are
-no pseudo-terminals under Windows.  If somebody from ActiveState reads
-this and wants to work on it, please contact me, maybe we could use
-the equivalent of pipes to emulate the behaviour.
+Sorry, ActiveState Perl on Windows is not supported, basically 
+because there are no pseudo-terminals under Windows. 
 
 If it's working on your system, please send me a short note with
 details (version number, distribution, etc. 'uname -a' is a good
@@ -53,4 +45,4 @@ think about lending them a machine for their compile farm!
 
 
 Roland <RGiersig@cpan.org>
-2002-03-12
+2006-05-05

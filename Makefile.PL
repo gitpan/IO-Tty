@@ -1,20 +1,24 @@
 use ExtUtils::MakeMaker;
 
 use strict;
-use Config qw(%Config);
 use IO::File;
+use Config qw(%Config);
+
+my $flags = "$Config{ccflags} $Config{ldflags}";
+$flags =~ s/([^A-Za-z0-9 -])/\\$1/g; # escape shell-metachars
+
 $|=1; # to see output immediately
 $^W=1;
 
 my %define;
 my @libs;
-my $Package_Version = '1.02';  # keep this consistent with Tty.pm
+my $Package_Version = '1.03';  # keep this consistent with Tty.pm
 my $Is_Beta = ($Package_Version =~ m/_/);
 
 open(SUB, ">xssubs.c") or die "open: $!";
 
-warn "WARNING: perl versions prior to 5.00503 may have problems.\n"
-  if $] < 5.00503;
+warn "WARNING: perl versions prior to 5.8 are untested and may have problems.\n"
+  if $] < 5.008;
 
 # improve backward-compatibility
 @define{qw(-DPL_sv_undef=sv_undef -DPL_dowarn=dowarn)} = (undef, undef)
@@ -64,14 +68,17 @@ int main () { return 0; }
 ESQ
 close(TST);
 
-if (system("$Config{'cc'} $Config{'ccflags'} compilerok.c > compilerok.log 2>&1")) {
+if (system("$Config{'cc'} $flags compilerok.c > compilerok.log 2>&1")) {
   die <<"__EOT__";
 
 ERROR: cannot run the configured compiler '$Config{'cc'}'
-(see conf/compilerok.log).  Please fix this by adjusting
-perls Config.pm, creating a symlink to the right location
-or maybe by just adding it to your PATH.  You could also build
-perl yourself.
+(see conf/compilerok.log). Suggestions: 
+1) The complier '$Config{'cc'}' is not in your PATH. Add it.
+2) The compiler isn't installed on your system. Install it.
+3) You only have a different compiler installed (e.g. 'gcc').
+   Either fix the compiler config in the perl Config.pm
+   or install a perl that was built with the right compiler
+   (you could build perl yourself with the available compiler).
 
 __EOT__
 }
@@ -132,7 +139,7 @@ ESQ
 
   close(TST);
   print "Looking for $f()" . "." x (13-length($f)) . " ";
-  if (system("$Config{'cc'} $Config{'ccflags'} $funcs{$f} functest_$f.c > functest_$f.log 2>&1")) {
+  if (system("$Config{'cc'} $flags $funcs{$f} functest_$f.c > functest_$f.log 2>&1")) {
     print "not found.\n";
   } else {
     $define{"-DHAVE_\U$f"} = undef;
@@ -144,7 +151,7 @@ ESQ
 
 # find various headerfiles
 
-my @headers = qw(termios.h termio.h libutil.h util.h pty.h sys/stropts.h);
+my @headers = qw(termios.h termio.h libutil.h util.h pty.h sys/stropts.h sys/ptyio.h);
 my %headers;
 
 foreach my $h (sort @headers) {
@@ -158,7 +165,7 @@ int main () { return 0; }
 ESQ
   close(TST);
   print "Looking for $h" . "." x (15-length($h)) . " ";
-  if(system("$Config{'cc'} $Config{'ccflags'} headtest_$def.c > headtest_$def.log 2>&1")) {
+  if(system("$Config{'cc'} $flags headtest_$def.c > headtest_$def.log 2>&1")) {
     print "not found.\n"
   }
   else {
@@ -236,8 +243,8 @@ choke me badly on line 29999
 __EOT__
   close(TST);
 
-  if (system("$Config{'cc'} $Config{'ccflags'} @{[keys %define]} ttsymtest_$s.c >ttsymtest_$s.log 2>&1")) {
-    print SUB qq{newCONSTSUB(stash, "$s", &PL_sv_undef);\n};
+  if (system("$Config{'cc'} $flags @{[keys %define]} ttsymtest_$s.c >ttsymtest_$s.log 2>&1")) {
+    print SUB qq{newCONSTSUB(stash, "$s", newSV(0));\n};
     # now check if the symbol is defined (should have an error message
     # for line 29999 in the logfile)
     open(CCOUT, "ttsymtest_$s.log") or die "open ttsymtest_$s.log: $!";

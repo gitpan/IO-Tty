@@ -45,40 +45,6 @@ typedef FILE * InOutStream;
 #  endif
 #endif
 
-#ifndef newCONSTSUB
-static void
-newCONSTSUB(stash,name,sv)
-    HV *stash;
-    char *name;
-    SV *sv;
-{
-#ifdef dTHR
-    dTHR;
-#endif
-    U32 oldhints = hints;
-    HV *old_cop_stash = curcop->cop_stash;
-    HV *old_curstash = curstash;
-    line_t oldline = curcop->cop_line;
-    curcop->cop_line = copline;
-
-    hints &= ~HINT_BLOCK_SCOPE;
-    if(stash)
-	curstash = curcop->cop_stash = stash;
-
-    newSUB(
-	MY_start_subparse(FALSE, 0),
-	newSVOP(OP_CONST, 0, newSVpv(name,0)),
-	newSVOP(OP_CONST, 0, &sv_no),	/* SvPV(&sv_no) == "" -- GMB */
-	newSTATEOP(0, Nullch, newSVOP(OP_CONST, 0, sv))
-    );
-
-    hints = oldhints;
-    curcop->cop_stash = old_cop_stash;
-    curstash = old_curstash;
-    curcop->cop_line = oldline;
-}
-#endif
-
 /*
  * The following pty-allocation code was heavily inspired by its
  * counterparts in openssh 3.0p1 and Xemacs 21.4.5 but is a complete

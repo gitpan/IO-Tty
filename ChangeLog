@@ -1,3 +1,13 @@
+2006-04-25   Roland Giersig  <rgiersig@cpan.org>
+
+	* v1.03
+
+	* Tty.c: changed newCONSTSUB to use newSV(0) instead of PL_sv_undef, now undef'd constants work
+
+	* Makefile.PL: made ccflags handling meta-char safe, added ldflags; enhanced error msg
+
+	* Makefile.PL: added <sys/ptyio.h>
+
 2002-04-02   Roland Giersig  <rgiersig@cpan.org>
 
 	* Tty.pm, Pty.pm: v1.02; disable warning for non-existant die handler
