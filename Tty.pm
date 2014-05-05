@@ -13,8 +13,8 @@ require DynaLoader;
 
 use vars qw(@ISA $VERSION $XS_VERSION $CONFIG $DEBUG);
 
-$VERSION = '1.10';
-$XS_VERSION = "1.10";
+$VERSION = '1.11';
+$XS_VERSION = "1.11";
 @ISA = qw(IO::Handle);
 
 eval { local $^W = 0; undef local $SIG{__DIE__}; require IO::Stty };
@@ -62,6 +62,25 @@ sub clone_winsize_from {
   return undef;
 }
 
+# ioctl() doesn't tell us how long the structure is, so we'll have to trim it
+# after TIOCGWINSZ
+my $SIZEOF_WINSIZE = length IO::Tty::pack_winsize(0,0,0,0);
+
+sub get_winsize {
+  my $self = shift;
+  ioctl($self, IO::Tty::Constant::TIOCGWINSZ(), my $winsize)
+    or croak "Cannot TIOCGWINSZ - $!";
+  substr($winsize, $SIZEOF_WINSIZE) = "";
+  return IO::Tty::unpack_winsize($winsize);
+}
+
+sub set_winsize {
+  my $self = shift;
+  my $winsize = IO::Tty::pack_winsize(@_);
+  ioctl($self, IO::Tty::Constant::TIOCSWINSZ(), $winsize)
+    or croak "Cannot TIOCSWINSZ - $!";
+}
+
 sub set_raw($) {
   require POSIX;
   my $self = shift;
@@ -99,7 +118,7 @@ IO::Tty - Low-level allocate a pseudo-Tty, import constants.
 
 =head1 VERSION
 
-1.10
+1.11
 
 =head1 SYNOPSIS
 
@@ -244,8 +263,8 @@ E<lt>F<RGiersig@cpan.org>E<gt>.
 
 Contains copyrighted stuff from openssh v3.0p1, authored by Tatu
 Ylonen <ylo@cs.hut.fi>, Markus Friedl and Todd C. Miller
-<Todd.Miller@courtesan.com>.  I also got a lot of inspiry from the pty
-code in Xemacs.
+<Todd.Miller@courtesan.com>.  I also got a lot of inspiration from
+the pty code in Xemacs.
 
 
 =head1 COPYRIGHT
